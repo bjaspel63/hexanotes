@@ -2,12 +2,13 @@
 // Firebase Setup
 // ---------------------------
 const firebaseConfig = {
-  apiKey: "AIzaSyCaI-TBhNJHlewgMk9Zi9F3pYErS-CDAx8",
-  authDomain: "hexanotes-d49d6.firebaseapp.com",
-  projectId: "hexanotes-d49d6",
-  storageBucket: "hexanotes-d49d6.firebasestorage.app",
-  messagingSenderId: "951796055993",
-  appId: "1:951796055993:web:b39c05f47a43c24844c068"
+  apiKey: "AIzaSyDDwVueTk5RXBXqYPMMvWQcqj0IsgTRcfE",
+  authDomain: "hexanotes-27eed.firebaseapp.com",
+  projectId: "hexanotes-27eed",
+  storageBucket: "hexanotes-27eed.firebasestorage.app",
+  messagingSenderId: "551318569541",
+  appId: "1:551318569541:web:90bb0d78277962fb25d92c",
+  measurementId: "G-3JKXSGXWX5"
 };
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
