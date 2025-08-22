@@ -1,6 +1,6 @@
-// ===========================
-// Initialize Firebase
-// ===========================
+// ---------------------------
+// Firebase Setup
+// ---------------------------
 const firebaseConfig = {
   apiKey: "AIzaSyCaI-TBhNJHlewgMk9Zi9F3pYErS-CDAx8",
   authDomain: "hexanotes-d49d6.firebaseapp.com",
@@ -13,16 +13,16 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 
-// ===========================
-// Initialize Supabase
-// ===========================
+// ---------------------------
+// Supabase Setup
+// ---------------------------
 const SUPABASE_URL = 'https://kwvyjdhsvwiywjmjafws.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt3dnlqZGhzdndpeXdqbWphZndzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4NzQwMTMsImV4cCI6MjA3MTQ1MDAxM30.SXsYUH7pl_QRGr36sUA1V806ZhZn4yc2n0jp0WZunc0';
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// ===========================
+// ---------------------------
 // DOM Elements
-// ===========================
+// ---------------------------
 const loginBtn = document.getElementById('login-btn');
 const logoutBtn = document.getElementById('logout-btn');
 const notesContainer = document.getElementById('notes-container');
@@ -38,9 +38,9 @@ const tagsInput = document.getElementById('note-tags');
 
 let currentUser = null;
 
-// ===========================
-// Login / Logout
-// ===========================
+// ---------------------------
+// Firebase Auth
+// ---------------------------
 loginBtn.addEventListener('click', async () => {
   try {
     const provider = new firebase.auth.GoogleAuthProvider();
@@ -76,19 +76,19 @@ auth.onAuthStateChanged(user => {
   }
 });
 
-// ===========================
-// Modal open/close
-// ===========================
+// ---------------------------
+// Modal
+// ---------------------------
 addNoteBtn.addEventListener('click', () => modal.style.display='block');
 closeModal.addEventListener('click', () => modal.style.display='none');
 
-// ===========================
-// Save note
-// ===========================
+// ---------------------------
+// Save Note
+// ---------------------------
 saveNoteBtn.addEventListener('click', async () => {
   const title = titleInput.value.trim();
   const content = contentInput.value.trim();
-  const tags = tagsInput.value.split(',').map(t=>t.trim()).filter(Boolean);
+  const tags = tagsInput.value.split(',').map(t => t.trim()).filter(Boolean);
 
   if (!title || !content || !currentUser) return;
 
@@ -103,17 +103,17 @@ saveNoteBtn.addEventListener('click', async () => {
   }
 });
 
-// ===========================
-// Fetch & render notes
-// ===========================
+// ---------------------------
+// Fetch Notes
+// ---------------------------
 async function fetchNotes(term='') {
   if(!currentUser) return;
 
   let query = supabase.from('notes').select('*')
     .eq('user_id', currentUser.uid)
-    .order('created_at',{ascending:false});
+    .order('created_at', {ascending:false});
 
-  if(term) query=query.ilike('title', `%${term}%`);
+  if(term) query = query.ilike('title', `%${term}%`);
 
   const { data, error } = await query;
   if(error) console.error(error);
@@ -121,61 +121,61 @@ async function fetchNotes(term='') {
 }
 
 function renderNotes(notes){
-  notesContainer.innerHTML='';
-  notes.forEach(note=>{
+  notesContainer.innerHTML = '';
+  notes.forEach(note => {
     const card = document.createElement('div');
     card.className = 'note-card';
-    card.innerHTML=`
+    card.innerHTML = `
       <h3>${note.title}</h3>
       <p>${note.content}</p>
-      <p class="tags">${note.tags?.join(', ')||''}</p>
+      <p class="tags">${note.tags?.join(',') || ''}</p>
       <div class="actions">
         <button class="edit-btn">Edit</button>
         <button class="delete-btn">Delete</button>
       </div>
     `;
-    const editBtn = card.querySelector('.edit-btn');
-    const deleteBtn = card.querySelector('.delete-btn');
 
-    editBtn.addEventListener('click', () => editNote(note));
-    deleteBtn.addEventListener('click', () => deleteNote(note.id));
+    card.querySelector('.edit-btn').addEventListener('click', () => editNote(note));
+    card.querySelector('.delete-btn').addEventListener('click', () => deleteNote(note.id));
 
     notesContainer.appendChild(card);
   });
 }
 
-// ===========================
-// Edit note
-// ===========================
+// ---------------------------
+// Edit Note
+// ---------------------------
 async function editNote(note){
   const newTitle = prompt('New title:', note.title);
   const newContent = prompt('New content:', note.content);
   const newTags = prompt('New tags (comma separated):', note.tags?.join(',')||'');
   if(!newTitle || !newContent) return;
 
-  const tagsArray = newTags.split(',').map(t=>t.trim()).filter(Boolean);
+  const tagsArray = newTags.split(',').map(t => t.trim()).filter(Boolean);
 
-  const { error } = await supabase.from('notes').update({
-    title: newTitle,
-    content: newContent,
-    tags: tagsArray
-  }).eq('id', note.id).eq('user_id', currentUser.uid);
+  const { error } = await supabase.from('notes')
+    .update({ title: newTitle, content: newContent, tags: tagsArray })
+    .eq('id', note.id)
+    .eq('user_id', currentUser.uid);
 
   if(error) alert(error.message);
   else fetchNotes();
 }
 
-// ===========================
-// Delete note
-// ===========================
+// ---------------------------
+// Delete Note
+// ---------------------------
 async function deleteNote(id){
   if(!confirm('Delete this note?')) return;
-  const { error } = await supabase.from('notes').delete().eq('id', id).eq('user_id', currentUser.uid);
+  const { error } = await supabase.from('notes')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', currentUser.uid);
   if(error) alert(error.message);
   else fetchNotes();
 }
 
-// ===========================
+// ---------------------------
 // Search
-// ===========================
+// ---------------------------
 searchInput.addEventListener('input', e => fetchNotes(e.target.value.trim()));
