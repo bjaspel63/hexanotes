@@ -24,7 +24,7 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 // DOM Elements
 // ---------------------------
 const loginScreen = document.getElementById('login-screen');
-const mainScreen = document.getElementById('main-screen');
+const appScreen = document.getElementById('app-screen');
 
 const loginBtn = document.getElementById('login-btn');
 const logoutBtn = document.getElementById('logout-btn');
@@ -42,38 +42,32 @@ const tagsInput = document.getElementById('note-tags');
 
 let currentUser = null;
 
-// ---------------------------
-// Auth State Handling
-// ---------------------------
-auth.onAuthStateChanged(user => {
-  if (user) {
-    currentUser = user;
-    loginScreen.style.display = 'none';
-    mainScreen.style.display = 'block';
-    fetchNotes();
-  } else {
-    currentUser = null;
-    loginScreen.style.display = 'flex';
-    mainScreen.style.display = 'none';
-  }
-});
-
-// ---------------------------
-// Login / Logout
-// ---------------------------
 loginBtn.addEventListener('click', async () => {
   try {
     const provider = new firebase.auth.GoogleAuthProvider();
-    await auth.signInWithPopup(provider);
-    // onAuthStateChanged will handle the UI
+    const result = await auth.signInWithPopup(provider);
+    console.log('User:', result.user);
+    alert(`Welcome ${result.user.displayName}`);
   } catch(err) {
     console.error(err);
     alert(err.message);
   }
 });
 
+// Logout
 logoutBtn.addEventListener('click', async () => {
   await auth.signOut();
+});
+
+// Auth State
+auth.onAuthStateChanged(user => {
+  if (user) {
+    loginScreen.style.display = 'none';
+    appScreen.style.display = 'block';
+  } else {
+    loginScreen.style.display = 'flex';
+    appScreen.style.display = 'none';
+  }
 });
 
 // ---------------------------
