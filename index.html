@@ -12,22 +12,26 @@
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-auth-compat.js"></script>
+
 </head>
 <body>
 
 <!-- ========================= -->
 <!-- LOGIN SCREEN -->
 <!-- ========================= -->
-<div id="login-screen" style="display:flex; justify-content:center; align-items:center; height:100vh; flex-direction:column; gap:1rem;">
+<div id="login-screen">
   <h1>Welcome to HexaNotes</h1>
-  <button id="login-btn">Login with Google</button>
+  <button id="login-btn">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" alt="Google Logo">
+    Sign in with Google
+  </button>
 </div>
 
 <!-- ========================= -->
-<!-- MAIN SCREEN -->
+<!-- MAIN APP SCREEN -->
+<!-- Hidden by default -->
 <!-- ========================= -->
-<div id="main-screen" style="display:none;">
-
+<div id="app-screen" style="display:none;">
   <header>
     <h1>HexaNotes</h1>
     <div>
@@ -43,8 +47,8 @@
     <div class="notes-container" id="notes-container"></div>
   </main>
 
-  <!-- Modal (hidden by default) -->
-  <div id="note-modal" class="modal" style="display: none;">
+  <!-- Modal -->
+  <div id="note-modal" class="modal">
     <div class="modal-content">
       <span class="close">&times;</span>
       <h2 id="modal-title">Add Note</h2>
@@ -54,11 +58,8 @@
       <button id="save-note-btn">Save Note</button>
     </div>
   </div>
-
 </div>
 
-<!-- Main JS -->
 <script src="script.js"></script>
-
 </body>
 </html>
