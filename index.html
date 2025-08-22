@@ -1,46 +1,54 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HexaNotes</title>
-    <link rel="stylesheet" href="style.css">
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-    
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HexaNotes</title>
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Supabase JS -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.35.0/dist/supabase.min.js"></script>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-auth-compat.js"></script>
 </head>
 <body>
-    <header>
-        <h1>HexaNotes</h1>
-        <div>
-            <button id="login-btn">Login with Google</button>
-            <button id="logout-btn" hidden>Logout</button>
-        </div>
-    </header>
+  <header>
+    <h1>HexaNotes</h1>
+    <div class="auth-buttons">
+      <button id="login-btn">Login with Google</button>
+      <button id="logout-btn" hidden>Logout</button>
+    </div>
+  </header>
 
-    <main>
-        <div class="controls">
-            <input type="text" id="search" placeholder="Search notes...">
-            <button id="add-note-btn">Add Note</button>
-        </div>
-        <div class="notes-container" id="notes-container"></div>
-    </main>
-
-    <!-- Modal -->
-    <div id="note-modal" class="modal">
-        <div class="modal-content">
-            <span class="close">&times;</span>
-            <h2 id="modal-title">Add Note</h2>
-            <input type="text" id="note-title" placeholder="Title">
-            <textarea id="note-content" placeholder="Content"></textarea>
-            <input type="text" id="note-tags" placeholder="Tags (comma separated)">
-            <button id="save-note-btn">Save Note</button>
-        </div>
+  <main>
+    <div class="controls">
+      <input type="text" id="search-input" placeholder="Search notes...">
+      <form id="add-note-form">
+        <input type="text" id="note-title-input" name="title" placeholder="Title" required>
+        <textarea id="note-content-input" name="content" placeholder="Content" required></textarea>
+        <input type="text" id="note-tags-input" name="tags" placeholder="Tags (comma separated)">
+        <button type="submit">Add Note</button>
+      </form>
     </div>
 
-    <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-auth-compat.js"></script>
+    <div class="notes-container" id="notes-container"></div>
+  </main>
 
-    <script src="script.js"></script>
+  <!-- Optional modal (if you want to use modal for add/edit) -->
+  <div id="note-modal" class="modal" hidden>
+    <div class="modal-content">
+      <span class="close">&times;</span>
+      <h2 id="modal-title">Add Note</h2>
+      <input type="text" id="modal-note-title" placeholder="Title">
+      <textarea id="modal-note-content" placeholder="Content"></textarea>
+      <input type="text" id="modal-note-tags" placeholder="Tags (comma separated)">
+      <button id="save-note-btn">Save Note</button>
+    </div>
+  </div>
+
+  <!-- Your custom JS -->
+  <script src="script.js"></script>
 </body>
 </html>
