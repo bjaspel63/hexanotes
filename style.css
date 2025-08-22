@@ -84,6 +84,56 @@ main { padding:2rem; max-width:1200px; margin:auto; }
 .toast.success { background: #4e9448; }
 .toast.error { background: #d9534f; }
 
+/* ========================= */
+/* LOGIN SCREEN */
+#login-screen {
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  height:100vh;
+  flex-direction:column;
+  gap:2rem;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color:white;
+  text-align:center;
+}
+
+#login-screen h1 {
+  font-size:2rem;
+  font-weight:700;
+}
+
+#login-btn {
+  display:flex;
+  align-items:center;
+  gap:1rem;
+  background:white;
+  color:#333;
+  padding:0.8rem 1.5rem;
+  font-size:1rem;
+  font-weight:600;
+  border:none;
+  border-radius:10px;
+  cursor:pointer;
+  box-shadow:0 4px 15px rgba(0,0,0,0.2);
+  transition:all 0.2s;
+}
+
+#login-btn:hover {
+  transform:translateY(-2px);
+  box-shadow:0 6px 20px rgba(0,0,0,0.25);
+}
+
+#login-btn img {
+  width:20px;
+  height:20px;
+}
+
+/* ========================= */
+/* MAIN APP SCREEN */
+/* Keep your previous HexaNotes CSS here */
+
+
 @keyframes slideInToast { to { opacity:1; transform:translateY(0); } }
 @keyframes fadeOutToast { to { opacity:0; transform:translateY(20px); } }
 
