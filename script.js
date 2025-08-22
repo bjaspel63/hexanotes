@@ -7,7 +7,7 @@ const firebaseConfig = {
   projectId: "hexanotes-d49d6",
   storageBucket: "hexanotes-d49d6.firebasestorage.app",
   messagingSenderId: "951796055993",
-  appId: "1:951796055993:web:63a3988924a610ce44c068"
+  appId: "1:951796055993:web:b39c05f47a43c24844c068"
 };
 
 firebase.initializeApp(firebaseConfig);
