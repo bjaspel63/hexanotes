@@ -23,8 +23,12 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 // ---------------------------
 // DOM Elements
 // ---------------------------
+const loginScreen = document.getElementById('login-screen');
+const mainScreen = document.getElementById('main-screen');
+
 const loginBtn = document.getElementById('login-btn');
 const logoutBtn = document.getElementById('logout-btn');
+
 const notesContainer = document.getElementById('notes-container');
 const searchInput = document.getElementById('search-input');
 const addNoteBtn = document.getElementById('add-note-btn');
@@ -39,18 +43,30 @@ const tagsInput = document.getElementById('note-tags');
 let currentUser = null;
 
 // ---------------------------
-// Firebase Auth
+// Auth State Handling
+// ---------------------------
+auth.onAuthStateChanged(user => {
+  if (user) {
+    currentUser = user;
+    loginScreen.style.display = 'none';
+    mainScreen.style.display = 'block';
+    fetchNotes();
+  } else {
+    currentUser = null;
+    loginScreen.style.display = 'flex';
+    mainScreen.style.display = 'none';
+  }
+});
+
+// ---------------------------
+// Login / Logout
 // ---------------------------
 loginBtn.addEventListener('click', async () => {
   try {
     const provider = new firebase.auth.GoogleAuthProvider();
-    const result = await auth.signInWithPopup(provider);
-    currentUser = result.user; // ✅ Important: set currentUser
-    loginBtn.hidden = true;
-    logoutBtn.hidden = false;
-    alert(`Welcome ${currentUser.displayName}`);
-    fetchNotes(); // load notes after login
-  } catch (err) {
+    await auth.signInWithPopup(provider);
+    // onAuthStateChanged will handle the UI
+  } catch(err) {
     console.error(err);
     alert(err.message);
   }
@@ -58,24 +74,6 @@ loginBtn.addEventListener('click', async () => {
 
 logoutBtn.addEventListener('click', async () => {
   await auth.signOut();
-  currentUser = null;
-  loginBtn.hidden = false;
-  logoutBtn.hidden = true;
-  notesContainer.innerHTML = '';
-});
-
-auth.onAuthStateChanged(user => {
-  if (user) {
-    currentUser = user;
-    loginBtn.hidden = true;
-    logoutBtn.hidden = false;
-    fetchNotes();
-  } else {
-    currentUser = null;
-    loginBtn.hidden = false;
-    logoutBtn.hidden = true;
-    notesContainer.innerHTML = '';
-  }
 });
 
 // ---------------------------
@@ -99,9 +97,8 @@ saveNoteBtn.addEventListener('click', async () => {
   const { error } = await supabase.from('notes')
     .insert([{ title, content, tags, user_id: currentUser.uid }]);
 
-  if (error) {
-    alert(error.message);
-  } else {
+  if (error) alert(error.message);
+  else {
     fetchNotes();
     modal.style.display = 'none';
     titleInput.value = '';
@@ -176,12 +173,11 @@ async function deleteNote(id) {
     .delete()
     .eq('id', id)
     .eq('user_id', currentUser.uid);
-
   if (error) alert(error.message);
   else fetchNotes();
 }
 
 // ---------------------------
-// Search
+// Search Notes
 // ---------------------------
 searchInput.addEventListener('input', e => fetchNotes(e.target.value.trim()));
