@@ -9,6 +9,10 @@
 <!-- Supabase JS -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.35.0/dist/supabase.min.js"></script>
 
+<!-- Firebase JS -->
+<script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-auth-compat.js"></script>
+
 </head>
 <body>
 
@@ -29,21 +33,16 @@
 </main>
 
 <!-- Modal -->
-<div id="note-modal" class="modal" hidden>
+<div id="note-modal" class="modal">
   <div class="modal-content">
     <span class="close">&times;</span>
-    <h2 id="modal-title">Add Note</h2>
+    <h2>Add Note</h2>
     <input type="text" id="note-title" placeholder="Title">
     <textarea id="note-content" placeholder="Content"></textarea>
     <input type="text" id="note-tags" placeholder="Tags (comma separated)">
     <button id="save-note-btn">Save Note</button>
   </div>
 </div>
-
-<script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-auth-compat.js"></script>
-<script src="script.js"></script>
-
 
 <script src="script.js"></script>
 </body>
