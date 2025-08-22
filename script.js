@@ -41,18 +41,19 @@ let currentUser = null;
 // ---------------------------
 // Firebase Auth
 // ---------------------------
+const loginBtn = document.getElementById('login-btn');
 loginBtn.addEventListener('click', async () => {
   try {
     const provider = new firebase.auth.GoogleAuthProvider();
     const result = await auth.signInWithPopup(provider);
-    currentUser = result.user;
-    loginBtn.hidden = true;
-    logoutBtn.hidden = false;
-    fetchNotes();
-  } catch (err) {
+    console.log('User:', result.user);
+    alert(`Welcome ${result.user.displayName}`);
+  } catch(err) {
+    console.error(err);
     alert(err.message);
   }
 });
+
 
 logoutBtn.addEventListener('click', async () => {
   await auth.signOut();
