@@ -96,7 +96,7 @@ saveNoteBtn.addEventListener('click', async () => {
   const { error } = await supabase.from('notes')
     .insert([{ title, content, tags, user_id: currentUser.uid }]);
 
-  if(error) alert(error.message);
+  if (error) alert(error.message);
   else {
     fetchNotes();
     modal.style.display = 'none';
@@ -109,21 +109,21 @@ saveNoteBtn.addEventListener('click', async () => {
 // ---------------------------
 // Fetch & Render Notes
 // ---------------------------
-async function fetchNotes(term='') {
-  if(!currentUser) return;
+async function fetchNotes(term = '') {
+  if (!currentUser) return;
 
   let query = supabase.from('notes').select('*')
     .eq('user_id', currentUser.uid)
-    .order('created_at', {ascending:false});
+    .order('created_at', { ascending: false });
 
-  if(term) query = query.ilike('title', `%${term}%`);
+  if (term) query = query.ilike('title', `%${term}%`);
 
   const { data, error } = await query;
-  if(error) console.error(error);
+  if (error) console.error(error);
   else renderNotes(data);
 }
 
-function renderNotes(notes){
+function renderNotes(notes) {
   notesContainer.innerHTML = '';
   notes.forEach(note => {
     const card = document.createElement('div');
@@ -131,7 +131,7 @@ function renderNotes(notes){
     card.innerHTML = `
       <h3>${note.title}</h3>
       <p>${note.content}</p>
-      <p class="tags">${note.tags?.join(',')||''}</p>
+      <p class="tags">${note.tags?.join(',') || ''}</p>
       <div class="actions">
         <button class="edit-btn">Edit</button>
         <button class="delete-btn">Delete</button>
@@ -146,11 +146,11 @@ function renderNotes(notes){
 // ---------------------------
 // Edit Note
 // ---------------------------
-async function editNote(note){
+async function editNote(note) {
   const newTitle = prompt('New title:', note.title);
   const newContent = prompt('New content:', note.content);
-  const newTags = prompt('New tags (comma separated):', note.tags?.join(',')||'');
-  if(!newTitle || !newContent) return;
+  const newTags = prompt('New tags (comma separated):', note.tags?.join(',') || '');
+  if (!newTitle || !newContent) return;
 
   const tagsArray = newTags.split(',').map(t => t.trim()).filter(Boolean);
 
@@ -159,20 +159,20 @@ async function editNote(note){
     .eq('id', note.id)
     .eq('user_id', currentUser.uid);
 
-  if(error) alert(error.message);
+  if (error) alert(error.message);
   else fetchNotes();
 }
 
 // ---------------------------
 // Delete Note
 // ---------------------------
-async function deleteNote(id){
-  if(!confirm('Delete this note?')) return;
+async function deleteNote(id) {
+  if (!confirm('Delete this note?')) return;
   const { error } = await supabase.from('notes')
     .delete()
     .eq('id', id)
     .eq('user_id', currentUser.uid);
-  if(error) alert(error.message);
+  if (error) alert(error.message);
   else fetchNotes();
 }
 
