@@ -41,19 +41,20 @@ let currentUser = null;
 // ---------------------------
 // Firebase Auth
 // ---------------------------
-const loginBtn = document.getElementById('login-btn');
 loginBtn.addEventListener('click', async () => {
   try {
     const provider = new firebase.auth.GoogleAuthProvider();
     const result = await auth.signInWithPopup(provider);
-    console.log('User:', result.user);
-    alert(`Welcome ${result.user.displayName}`);
-  } catch(err) {
+    currentUser = result.user; // ✅ Important: set currentUser
+    loginBtn.hidden = true;
+    logoutBtn.hidden = false;
+    alert(`Welcome ${currentUser.displayName}`);
+    fetchNotes(); // load notes after login
+  } catch (err) {
     console.error(err);
     alert(err.message);
   }
 });
-
 
 logoutBtn.addEventListener('click', async () => {
   await auth.signOut();
@@ -98,8 +99,9 @@ saveNoteBtn.addEventListener('click', async () => {
   const { error } = await supabase.from('notes')
     .insert([{ title, content, tags, user_id: currentUser.uid }]);
 
-  if (error) alert(error.message);
-  else {
+  if (error) {
+    alert(error.message);
+  } else {
     fetchNotes();
     modal.style.display = 'none';
     titleInput.value = '';
@@ -174,6 +176,7 @@ async function deleteNote(id) {
     .delete()
     .eq('id', id)
     .eq('user_id', currentUser.uid);
+
   if (error) alert(error.message);
   else fetchNotes();
 }
