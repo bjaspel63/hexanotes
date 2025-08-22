@@ -9,39 +9,52 @@
 <!-- Supabase JS -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.35.0/dist/supabase.min.js"></script>
 
-  <!-- Firebase SDK -->
+<!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-auth-compat.js"></script>
-
 </head>
 <body>
 
-<header>
-  <h1>HexaNotes</h1>
-  <div>
-    <button id="login-btn">Login with Google</button>
-    <button id="logout-btn" hidden>Logout</button>
-  </div>
-</header>
+<!-- ========================= -->
+<!-- LOGIN SCREEN -->
+<!-- ========================= -->
+<div id="login-screen" style="display:flex; justify-content:center; align-items:center; height:100vh; flex-direction:column; gap:1rem;">
+  <h1>Welcome to HexaNotes</h1>
+  <button id="login-btn">Login with Google</button>
+</div>
 
-<main>
-  <div class="controls">
-    <input type="text" id="search-input" placeholder="Search notes...">
-    <button id="add-note-btn">Add Note</button>
-  </div>
-  <div class="notes-container" id="notes-container"></div>
-</main>
+<!-- ========================= -->
+<!-- MAIN SCREEN -->
+<!-- ========================= -->
+<div id="main-screen" style="display:none;">
 
-<!-- Modal (hidden by default) -->
-<div id="note-modal" class="modal" style="display: none;">
-  <div class="modal-content">
-    <span class="close">&times;</span>
-    <h2 id="modal-title">Add Note</h2>
-    <input type="text" id="note-title" placeholder="Title">
-    <textarea id="note-content" placeholder="Content"></textarea>
-    <input type="text" id="note-tags" placeholder="Tags (comma separated)">
-    <button id="save-note-btn">Save Note</button>
+  <header>
+    <h1>HexaNotes</h1>
+    <div>
+      <button id="logout-btn">Logout</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="controls">
+      <input type="text" id="search-input" placeholder="Search notes...">
+      <button id="add-note-btn">Add Note</button>
+    </div>
+    <div class="notes-container" id="notes-container"></div>
+  </main>
+
+  <!-- Modal (hidden by default) -->
+  <div id="note-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <span class="close">&times;</span>
+      <h2 id="modal-title">Add Note</h2>
+      <input type="text" id="note-title" placeholder="Title">
+      <textarea id="note-content" placeholder="Content"></textarea>
+      <input type="text" id="note-tags" placeholder="Tags (comma separated)">
+      <button id="save-note-btn">Save Note</button>
+    </div>
   </div>
+
 </div>
 
 <!-- Main JS -->
