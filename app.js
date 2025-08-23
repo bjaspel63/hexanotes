@@ -87,8 +87,6 @@ async function restoreNotes() {
             headers: { Authorization: `Bearer ${accessToken}` }
         });
         let data = await res.json();
-
-        // If data is an object (malformed), convert to empty array
         if (!Array.isArray(data)) data = [];
 
         notes = data;
@@ -101,7 +99,6 @@ async function restoreNotes() {
 
 // ===== Auto Backup =====
 const autoBackup = debounce(async () => {
-    if (!notes.length) return;
     try {
         showSyncing();
         const ready = await ensureGapiAndToken();
@@ -110,10 +107,11 @@ const autoBackup = debounce(async () => {
         const folderId = await getOrCreateFolderByName(DRIVE_PRIMARY_FOLDER);
         let file = await findFileInFolder(folderId, DRIVE_PRIMARY_FILE);
 
-        // Ensure notes is always an array
+        // Always ensure notes is an array
         const payload = new Blob([JSON.stringify(Array.isArray(notes) ? notes : [])], { type: 'application/json' });
 
         if (file) {
+            // Update existing file
             await gapi.client.request({
                 path: `/upload/drive/v3/files/${file.id}`,
                 method: 'PATCH',
@@ -121,18 +119,23 @@ const autoBackup = debounce(async () => {
                 body: payload
             });
         } else {
-            const metadata = { name: DRIVE_PRIMARY_FILE, parents: [folderId] };
+            // Create new file
+            const metadata = { name: DRIVE_PRIMARY_FILE, parents: [folderId], mimeType: 'application/json' };
             const formData = new FormData();
             formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
             formData.append('file', payload);
+
             await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id", {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${accessToken}` },
                 body: formData
             });
         }
-    } catch (err) { console.warn("Backup failed", err); }
-    finally { hideSyncing(); }
+    } catch (err) {
+        console.warn("Backup failed", err);
+    } finally {
+        hideSyncing();
+    }
 }, 1500);
 
 // ===== Render Notes =====
@@ -174,18 +177,11 @@ function renderNotes() {
             <div class="mt-3 note-files flex flex-col gap-1">
                 ${note.files?.map(f => {
                     if (!f.url) return '';
-                    const fileExt = f.name.split('.').pop().toLowerCase();
-                    if (f.type.startsWith("image/") || ["png","jpg","jpeg","gif","webp"].includes(fileExt)) {
-                        return `<img src="${f.url}" class="w-full rounded-lg" />`;
-                    }
-                    if (f.type.startsWith("video/") || ["mp4","webm","ogg"].includes(fileExt)) {
-                        return `<video src="${f.url}" controls class="w-full rounded-lg"></video>`;
-                    }
-                    // Other files
+                    if (f.type.startsWith("image/")) return `<img src="${f.url}" class="w-full rounded-lg" />`;
+                    if (f.type.startsWith("video/")) return `<video src="${f.url}" controls class="w-full rounded-lg"></video>`;
                     return `<a href="${f.url}" target="_blank" class="underline text-sm">${f.name}</a>`;
                 }).join('') || ''}
             </div>
-
             <button class="edit-btn absolute top-2 right-2 text-white bg-black/30 px-2 py-1 rounded">Edit</button>
         `;
 
@@ -286,9 +282,9 @@ window.onload = async () => {
     searchInput.addEventListener("input", renderNotes);
     tagFilter.addEventListener("change", renderNotes);
 
-    logoutBtn.addEventListener("click", () => {
+    logoutBtn.addEventListener("click", async () => {
         if (confirm("Are you sure you want to logout?")) {
-            autoBackup(); // save before logout
+            await autoBackup(); // save before logout
             localStorage.removeItem("accessToken");
             window.location.href = "index.html";
         }
