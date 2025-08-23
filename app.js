@@ -312,12 +312,21 @@ window.onload = async () => {
     searchInput.addEventListener("input", renderNotes);
     tagFilter.addEventListener("change", renderNotes);
 
-    logoutBtn.addEventListener("click", async () => {
-        if (!confirm("Are you sure you want to logout?")) return;
-        localStorage.removeItem("accessToken");
-        google.accounts.id.disableAutoSelect();
-        window.location.reload();
-    });
+    document.getElementById("logoutBtn")?.addEventListener("click", async () => {
+    if (!confirm("Are you sure you want to logout?")) return;
+
+    // Remove stored token
+    localStorage.removeItem("accessToken");
+
+    // Optional: revoke Google token
+    const token = gapi?.client?.getToken?.()?.access_token || localStorage.getItem("accessToken");
+    if (token) {
+        fetch(`https://oauth2.googleapis.com/revoke?token=${token}`, { method: 'POST' });
+    }
+
+    // Redirect to login page
+    window.location.href = "index.html";
+});
 
     // Color buttons
     document.querySelectorAll(".color-btn").forEach(btn=>{
