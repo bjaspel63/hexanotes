@@ -1,12 +1,104 @@
+/* ===== Note Card ===== */
 .note-card {
-  @apply p-5 rounded-3xl shadow-lg cursor-pointer transition-transform transform hover:scale-105 hover:shadow-2xl;
+  @apply p-5 rounded-3xl shadow-lg cursor-pointer transition-transform transform;
   transition: all 0.3s ease-in-out;
   background: linear-gradient(135deg, #fef08a, #fbbf24);
+  break-word: break-word;
 }
 .note-card:hover {
   background: linear-gradient(135deg, #fcd34d, #f59e0b);
+  transform: translateY(-5px) scale(1.05);
+  box-shadow: 0 20px 40px rgba(0,0,0,0.15);
 }
-.note-card.dragging { opacity:0.6; transform:scale(1.05); box-shadow:0 20px 30px rgba(0,0,0,0.2);}
-.tag-chip { @apply text-xs px-3 py-1 rounded-full bg-white/30 text-slate-800 font-medium transition hover:scale-105 hover:shadow; backdrop-filter: blur(4px);}
+.note-card.dragging {
+  opacity: 0.6;
+  transform: scale(1.05);
+  box-shadow: 0 20px 30px rgba(0,0,0,0.2);
+}
+
+/* ===== Tag Chips ===== */
+.tag-chip {
+  @apply text-xs px-3 py-1 rounded-full font-medium transition;
+  background: rgba(255,255,255,0.3);
+  color: #1e3a8a;
+  margin-top: 0.25rem;
+  backdrop-filter: blur(4px);
+}
+.tag-chip:hover {
+  transform: scale(1.05);
+  background: rgba(255,255,255,0.5);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* ===== Empty State ===== */
+#emptyState {
+  @apply text-slate-500 text-center py-10;
+}
+
+/* ===== Dialog ===== */
+dialog {
+  border: none;
+  border-radius: 1.5rem;
+  padding: 1.5rem;
+  width: 90%;
+  max-width: 500px;
+  box-shadow: 0 15px 40px rgba(0,0,0,0.2);
+  backdrop-filter: blur(8px);
+}
 dialog[open] { animation: modalFadeIn 0.25s ease; }
-@keyframes modalFadeIn { from {opacity:0; transform: translateY(-20px);} to {opacity:1; transform: translateY(0);} }
+
+@keyframes modalFadeIn {
+  from {opacity:0; transform: translateY(-20px);}
+  to {opacity:1; transform: translateY(0);}
+}
+
+/* ===== Buttons ===== */
+button {
+  @apply px-4 py-2 rounded-xl font-semibold transition;
+}
+button:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+}
+
+/* ===== Inputs ===== */
+input, textarea, select {
+  @apply px-4 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-yellow-400 transition;
+}
+
+/* ===== Notes Grid ===== */
+#notesGrid {
+  @apply grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5;
+}
+
+/* ===== Responsive Typography ===== */
+.note-card h3 {
+  @apply text-lg font-bold text-slate-900;
+}
+.note-card p {
+  @apply text-sm text-slate-700 mt-2;
+  word-break: break-word;
+}
+
+/* ===== PWA Install Button ===== */
+#installBtn {
+  @apply fixed bottom-5 right-5 bg-yellow-400 text-white px-4 py-2 rounded-full shadow-lg cursor-pointer transition hover:bg-yellow-500;
+}
+
+/* ===== Scrollbar Styling ===== */
+#notesGrid::-webkit-scrollbar {
+  width: 8px;
+}
+#notesGrid::-webkit-scrollbar-thumb {
+  background-color: rgba(0,0,0,0.2);
+  border-radius: 4px;
+}
+#notesGrid::-webkit-scrollbar-track {
+  background-color: rgba(0,0,0,0.05);
+}
+
+/* ===== Small Cards Gradient Variations ===== */
+.note-card[data-color="1"] { background: linear-gradient(135deg, #fef08a, #fbbf24); }
+.note-card[data-color="2"] { background: linear-gradient(135deg, #a5b4fc, #6366f1); }
+.note-card[data-color="3"] { background: linear-gradient(135deg, #6ee7b7, #10b981); }
+.note-card[data-color="4"] { background: linear-gradient(135deg, #fca5a5, #f87171); }
