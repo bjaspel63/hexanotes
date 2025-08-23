@@ -1,86 +1,131 @@
-/* ===== Global ===== */
+/* ========================== */
+/* ===== Global Styles ===== */
+/* ========================== */
 body {
   font-family: 'Inter', sans-serif;
-  background: #f0f4f8;
+  background: #f8fafc;
   color: #1e293b;
-  transition: background 0.3s;
+  margin: 0;
+  padding: 0;
 }
 
+* {
+  box-sizing: border-box;
+}
+
+/* ========================== */
+/* ===== Notes Grid ===== */
+/* ========================== */
+#notesGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+/* ========================== */
 /* ===== Note Card ===== */
+/* ========================== */
 .note-card {
-  padding: 1.25rem;
+  position: relative;
+  overflow: hidden;
   border-radius: 1.5rem;
+  padding: 1.5rem;
   cursor: pointer;
-  background: linear-gradient(135deg, #fef08a, #fbbf24);
-  box-shadow: 0 8px 20px rgba(0,0,0,0.1);
-  transition: all 0.3s ease-in-out;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  word-break: break-word;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  background-size: 200% 200%;
+  animation: gradientMove 10s ease infinite, floatCard 6s ease-in-out infinite;
 }
+
+/* Gradient color variations */
+.note-card[data-color="1"] { background: linear-gradient(135deg, #fef08a, #fbbf24); }
+.note-card[data-color="2"] { background: linear-gradient(135deg, #a5b4fc, #6366f1); }
+.note-card[data-color="3"] { background: linear-gradient(135deg, #6ee7b7, #10b981); }
+.note-card[data-color="4"] { background: linear-gradient(135deg, #fca5a5, #f87171); }
+.note-card[data-color="5"] { background: linear-gradient(135deg, #fbcfe8, #f472b6); }
+.note-card[data-color="6"] { background: linear-gradient(135deg, #fde68a, #f59e0b); }
+
+/* Hover effect */
 .note-card:hover {
-  transform: translateY(-5px) scale(1.05);
-  box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+  transform: translateY(-8px) scale(1.07);
+  box-shadow: 0 25px 50px rgba(0,0,0,0.2), 0 0 30px rgba(255,255,255,0.2);
+  animation-duration: 5s, 3s;
 }
+
+/* Dragging state */
 .note-card.dragging {
-  opacity: 0.7;
+  opacity: 0.6;
   transform: scale(1.05);
   box-shadow: 0 20px 30px rgba(0,0,0,0.2);
 }
 
-/* ===== Card Content ===== */
+/* Floating animation */
+@keyframes floatCard {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-5px) rotate(-0.5deg); }
+  50% { transform: translateY(-8px) rotate(0.5deg); }
+  75% { transform: translateY(-5px) rotate(-0.25deg); }
+}
+
+/* Gradient animation */
+@keyframes gradientMove {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* ========================== */
+/* ===== Typography ===== */
+/* ========================== */
 .note-card h3 {
   font-size: 1.125rem;
   font-weight: 700;
   color: #1e293b;
-  margin-bottom: 0.5rem;
 }
+
 .note-card p {
   font-size: 0.875rem;
   color: #334155;
-  flex-grow: 1;
-  margin-bottom: 0.75rem;
+  margin-top: 0.5rem;
+  word-break: break-word;
 }
 
+/* ========================== */
 /* ===== Tag Chips ===== */
+/* ========================== */
 .tag-chip {
   display: inline-block;
-  padding: 0.25rem 0.75rem;
   font-size: 0.75rem;
   font-weight: 500;
+  padding: 0.25rem 0.75rem;
   border-radius: 9999px;
-  background: rgba(255,255,255,0.3);
   color: #1e3a8a;
+  background: rgba(255,255,255,0.3);
   margin-top: 0.25rem;
-  margin-right: 0.25rem;
   backdrop-filter: blur(4px);
-  transition: all 0.25s ease;
+  transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
 }
 .tag-chip:hover {
-  transform: scale(1.05);
+  transform: scale(1.1) translateY(-2px);
   background: rgba(255,255,255,0.5);
   box-shadow: 0 4px 10px rgba(0,0,0,0.1);
 }
 
-/* ===== Notes Grid ===== */
-#notesGrid {
-  display: grid;
-  grid-template-columns: repeat(1, 1fr);
-  gap: 1.25rem;
-}
-@media (min-width: 640px) { #notesGrid { grid-template-columns: repeat(2, 1fr); } }
-@media (min-width: 1024px) { #notesGrid { grid-template-columns: repeat(3, 1fr); } }
-
+/* ========================== */
 /* ===== Empty State ===== */
+/* ========================== */
 #emptyState {
   text-align: center;
   color: #64748b;
-  padding: 2.5rem 1rem;
+  margin-top: 4rem;
   font-size: 1.125rem;
+  font-weight: 500;
 }
 
-/* ===== Dialog Styling ===== */
+/* ========================== */
+/* ===== Dialogs ===== */
+/* ========================== */
 dialog {
   border: none;
   border-radius: 1.5rem;
@@ -89,80 +134,85 @@ dialog {
   max-width: 500px;
   box-shadow: 0 15px 40px rgba(0,0,0,0.2);
   backdrop-filter: blur(8px);
-  transition: all 0.3s ease-in-out;
+  transition: all 0.3s ease;
 }
-dialog[open] { animation: modalFadeIn 0.25s ease; }
+dialog[open] {
+  animation: modalFadeIn 0.25s ease;
+}
+
 @keyframes modalFadeIn {
   from {opacity:0; transform: translateY(-20px);}
   to {opacity:1; transform: translateY(0);}
 }
 
+/* ========================== */
 /* ===== Buttons ===== */
+/* ========================== */
 button {
-  cursor: pointer;
   font-weight: 600;
-  border-radius: 1rem;
-  padding: 0.5rem 1rem;
-  transition: all 0.2s ease;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 button:hover {
   transform: scale(1.05);
-  box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+  box-shadow: 0 6px 12px rgba(0,0,0,0.1);
 }
 
-/* ===== Inputs & Textarea ===== */
-input, textarea, select {
-  padding: 0.5rem 1rem;
-  border-radius: 0.75rem;
-  border: 1px solid #cbd5e1;
-  outline: none;
-  transition: all 0.2s ease;
-}
-input:focus, textarea:focus, select:focus {
-  border-color: #facc15;
-  box-shadow: 0 0 0 2px rgba(250,204,21,0.3);
-}
-
-/* ===== Floating Action Button (FAB) ===== */
+/* Floating + FAB button */
 #newNoteBtn {
   position: fixed;
-  bottom: 2rem;
-  right: 2rem;
-  background: linear-gradient(135deg, #0ea5e9, #3b82f6);
+  bottom: 3rem;
+  right: 3rem;
+  background: linear-gradient(135deg, #0ea5e9, #2563eb);
   color: white;
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  font-size: 1.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+  padding: 1rem 1.25rem;
+  border-radius: 9999px;
+  font-size: 1.25rem;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.2);
   transition: all 0.3s ease;
 }
 #newNoteBtn:hover {
-  transform: scale(1.1);
-  box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+  transform: scale(1.1) translateY(-3px);
 }
 
-/* ===== PWA Install Button ===== */
+/* PWA Install Button */
 #installBtn {
   position: fixed;
-  bottom: 1.5rem;
-  right: 1.5rem;
+  bottom: 5rem;
+  right: 3rem;
   background: #facc15;
   color: white;
-  padding: 0.5rem 1rem;
+  padding: 0.75rem 1.25rem;
   border-radius: 9999px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
-  transition: all 0.25s ease;
+  font-weight: 600;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+  transition: all 0.3s ease;
 }
 #installBtn:hover {
-  background: #fbbf24;
   transform: scale(1.05);
+  background: #eab308;
 }
 
+/* ========================== */
+/* ===== Inputs ===== */
+/* ========================== */
+input, textarea, select {
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid #cbd5e1;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+}
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: #fbbf24;
+  box-shadow: 0 0 0 2px rgba(251,191,36,0.3);
+}
+
+/* ========================== */
 /* ===== Scrollbar Styling ===== */
+/* ========================== */
 #notesGrid::-webkit-scrollbar {
   width: 8px;
 }
@@ -174,8 +224,24 @@ input:focus, textarea:focus, select:focus {
   background-color: rgba(0,0,0,0.05);
 }
 
-/* ===== Small Cards Gradient Variations ===== */
-.note-card[data-color="1"] { background: linear-gradient(135deg, #fef08a, #fbbf24); }
-.note-card[data-color="2"] { background: linear-gradient(135deg, #a5b4fc, #6366f1); }
-.note-card[data-color="3"] { background: linear-gradient(135deg, #6ee7b7, #10b981); }
-.note-card[data-color="4"] { background: linear-gradient(135deg, #fca5a5, #f87171); }
+/* ========================== */
+/* ===== Pop Animations ===== */
+/* ========================== */
+@keyframes popIn {
+  0% { transform: scale(0.7); opacity: 0; }
+  70% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+@keyframes popOut {
+  0% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0.5); opacity: 0; }
+}
+
+.note-card.pop-in {
+  animation: popIn 0.3s ease forwards;
+}
+
+.note-card.pop-out {
+  animation: popOut 0.3s ease forwards;
+}
