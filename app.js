@@ -4,6 +4,15 @@ const DRIVE_PRIMARY_FILE = "notes.json";
 const DRIVE_LEGACY_FOLDER = "HexaNotesBackup";
 const DRIVE_LEGACY_FILE = "hexa-notes.json";
 
+// ===== Color Options =====
+const COLOR_OPTIONS = [
+    { name: "Yellow", value: "#fef08a", gradient: "linear-gradient(135deg, #fef08a, #facc15)", textColor: "#000" },
+    { name: "Red", value: "#f87171", gradient: "linear-gradient(135deg, #f87171, #ef4444)", textColor: "#fff" },
+    { name: "Sky", value: "#38bdf8", gradient: "linear-gradient(135deg, #38bdf8, #0ea5e9)", textColor: "#fff" },
+    { name: "Green", value: "#4ade80", gradient: "linear-gradient(135deg, #4ade80, #22c55e)", textColor: "#000" },
+    { name: "Purple", value: "#c084fc", gradient: "linear-gradient(135deg, #c084fc, #9333ea)", textColor: "#fff" }
+];
+
 // ===== Global Variables =====
 let notes = [];
 let accessToken = null;
@@ -16,14 +25,14 @@ const noteTitle = document.getElementById("noteTitle");
 const noteContent = document.getElementById("noteContent");
 const noteTags = document.getElementById("noteTags");
 const noteColor = document.getElementById("noteColor");
-const noteFilesInput = document.getElementById("noteFiles"); // File input
+const noteFilesInput = document.getElementById("noteFiles");
 const searchInput = document.getElementById("searchInput");
 const tagFilter = document.getElementById("tagFilter");
 const deleteNoteBtn = document.getElementById("deleteNoteBtn");
 const logoutBtn = document.getElementById("logoutBtn");
 const installBtn = document.getElementById("installBtn");
 const emptyState = document.getElementById("emptyState");
-const closeNoteBtn = document.getElementById("closeNoteBtn"); // Close button
+const closeNoteBtn = document.getElementById("closeNoteBtn");
 
 // ===== Floating Add Note Button (FAB) =====
 const fab = document.createElement("button");
@@ -203,24 +212,28 @@ function renderNotes() {
         const div = document.createElement("div");
         div.className = "note-card";
         div.draggable = true;
-        div.style.background = note.color || "linear-gradient(135deg, #fef08a, #fbbf24)";
 
-        // Convert URLs in content to clickable links
+        const colorOption = COLOR_OPTIONS.find(c => c.value === note.color) || COLOR_OPTIONS[0];
+        div.style.background = colorOption.gradient;
+        div.style.color = colorOption.textColor;
+
         const linkedContent = note.content?.replace(
             /(https?:\/\/[^\s]+)/g,
-            '<a href="$1" target="_blank" class="text-blue-600 underline">$1</a>'
+            `<a href="$1" target="_blank" style="color:${colorOption.textColor}; text-decoration: underline;">$1</a>`
         ) || "";
 
         div.innerHTML = `
             <h3 class="text-lg font-bold">${note.title || ""}</h3>
             <p class="mt-2 text-sm break-words">${linkedContent}</p>
-            <div class="mt-3 flex flex-wrap gap-1">${note.tags?.map(t => `<span class="tag-chip">${t}</span>`).join('') || ''}</div>
+            <div class="mt-3 flex flex-wrap gap-1">
+                ${note.tags?.map(t => `<span class="tag-chip" style="color:${colorOption.textColor}; border-color:${colorOption.textColor}">${t}</span>`).join('') || ''}
+            </div>
             <div class="mt-3 note-files">
                 ${note.files?.map(f => {
                     if(f.type.startsWith("image/")) return `<img src="${f.url}" class="w-full rounded-lg mb-2">`;
-                    if(f.type === "application/pdf") return `<a href="${f.url}" target="_blank" class="text-blue-600 underline">${f.name}</a>`;
+                    if(f.type === "application/pdf") return `<a href="${f.url}" target="_blank" style="color:${colorOption.textColor}; text-decoration: underline;">${f.name}</a>`;
                     if(f.type.startsWith("video/")) return `<video src="${f.url}" controls class="w-full rounded-lg mb-2"></video>`;
-                    return `<a href="${f.url}" target="_blank" class="text-blue-600 underline">${f.name}</a>`;
+                    return `<a href="${f.url}" target="_blank" style="color:${colorOption.textColor}; text-decoration: underline;">${f.name}</a>`;
                 }).join('') || ''}
             </div>
         `;
@@ -245,7 +258,7 @@ function openNote(id) {
     noteTitle.value = note.title || "";
     noteContent.value = note.content || "";
     noteTags.value = note.tags?.join(", ") || "";
-    noteColor.value = note.color || "#fef08a";
+    noteColor.value = note.color || COLOR_OPTIONS[0].value;
     deleteNoteBtn.style.display = "inline-block";
     noteDialog.showModal();
 }
@@ -255,7 +268,7 @@ function openNewNoteDialog() {
     noteTitle.value = "";
     noteContent.value = "";
     noteTags.value = "";
-    noteColor.value = "#fef08a";
+    noteColor.value = COLOR_OPTIONS[0].value;
     noteFilesInput.value = "";
     deleteNoteBtn.style.display = "none";
     noteDialog.showModal();
@@ -269,9 +282,8 @@ noteForm.addEventListener("submit", async e => {
 
     const id = noteIdInput.value;
     const tags = noteTags.value.split(",").map(t => t.trim()).filter(t => t);
-    const colorValue = noteColor.value || "#fef08a";
+    const colorValue = noteColor.value || COLOR_OPTIONS[0].value;
 
-    // Handle file attachments
     const filesArray = Array.from(noteFilesInput.files).map(f => ({
         name: f.name,
         type: f.type,
@@ -305,7 +317,7 @@ noteForm.addEventListener("submit", async e => {
     autoBackup();
 });
 
-// Close note dialog button
+// Close note dialog
 closeNoteBtn?.addEventListener("click", () => noteDialog.close());
 
 // Delete note
