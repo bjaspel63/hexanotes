@@ -11,7 +11,9 @@ const COLOR_OPTIONS = [
 
 let notes = [];
 let accessToken = null;
+let lastBackupNotes = "";
 
+// ===== DOM Elements =====
 let notesGrid, noteDialog, noteForm, noteIdInput, noteTitle, noteContent, noteTags, noteColor, noteFilesInput, existingFilesDiv;
 let searchInput, tagFilter, deleteNoteBtn, logoutBtn, installBtn, emptyState, closeNoteBtn;
 let fab, syncIndicator;
@@ -98,11 +100,7 @@ async function restoreNotes() {
         } catch (err) {
             console.warn("Drive JSON invalid or corrupted, auto-recovering...", err);
             toast("Notes file was invalid. Recovering from localStorage ✔");
-
-            // fallback to last saved localStorage version or empty array
             data = JSON.parse(localStorage.getItem("hexaNotes") || "[]");
-            
-            // save clean structure back to Drive
             notes = data;
             await backupNotes();
         }
@@ -125,12 +123,10 @@ async function backupNotes() {
         const folderId = await getOrCreateFolderByName(DRIVE_PRIMARY_FOLDER);
         let file = await findFileInFolder(folderId, DRIVE_PRIMARY_FILE);
 
-        // Always make sure notes is an array
         const cleanNotes = Array.isArray(notes) ? notes : [];
         const payload = new Blob([JSON.stringify(cleanNotes, null, 2)], { type: 'application/json' });
 
         if (file) {
-            // Update existing file
             await gapi.client.request({
                 path: `/upload/drive/v3/files/${file.id}`,
                 method: 'PATCH',
@@ -138,7 +134,6 @@ async function backupNotes() {
                 body: payload
             });
         } else {
-            // Create new file
             const metadata = { name: DRIVE_PRIMARY_FILE, parents: [folderId], mimeType: 'application/json' };
             const formData = new FormData();
             formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
@@ -150,7 +145,9 @@ async function backupNotes() {
                 body: formData
             });
         }
+
         toast("Notes synced to Drive ✔");
+        lastBackupNotes = JSON.stringify(notes); // update last backup snapshot
     } catch (err) {
         console.error("Backup failed", err);
         toast("Sync failed ❌");
@@ -258,64 +255,6 @@ function openNewNoteDialog() {
     noteDialog.showModal();
 }
 
-// ===== DOM Initialization =====
-window.onload = async () => {
-    notesGrid = document.getElementById("notesGrid");
-    noteDialog = document.getElementById("noteDialog");
-    noteForm = document.getElementById("noteForm");
-    noteIdInput = document.getElementById("noteId");
-    noteTitle = document.getElementById("noteTitle");
-    noteContent = document.getElementById("noteContent");
-    noteTags = document.getElementById("noteTags");
-    noteColor = document.getElementById("noteColor");
-    noteFilesInput = document.getElementById("noteFiles");
-    existingFilesDiv = document.getElementById("existingFiles");
-    searchInput = document.getElementById("searchInput");
-    tagFilter = document.getElementById("tagFilter");
-    deleteNoteBtn = document.getElementById("deleteNoteBtn");
-    logoutBtn = document.getElementById("logoutBtn");
-    installBtn = document.getElementById("installBtn");
-    emptyState = document.getElementById("emptyState");
-    closeNoteBtn = document.getElementById("closeNoteBtn");
-
-    fab = document.getElementById("fab");
-    fab.addEventListener("click", openNewNoteDialog);
-
-    syncIndicator = document.createElement("div");
-    syncIndicator.id = "syncIndicator";
-    syncIndicator.textContent = "Syncing...";
-    Object.assign(syncIndicator.style, {
-        position: "fixed", bottom: "20px", right: "20px",
-        background: "rgba(0,0,0,0.7)", color: "white",
-        padding: "10px 15px", borderRadius: "8px",
-        fontSize: "14px", display: "none"
-    });
-    document.body.appendChild(syncIndicator);
-
-    document.querySelectorAll(".color-btn").forEach(btn => {
-        btn.addEventListener("click", () => { noteColor.value = btn.dataset.color; });
-    });
-
-    noteForm.addEventListener("submit", handleNoteSubmit);
-    closeNoteBtn.addEventListener("click", () => noteDialog.close());
-    deleteNoteBtn.addEventListener("click", handleNoteDelete);
-    [noteTitle, noteContent, noteTags, noteColor, noteFilesInput].forEach(i => i.addEventListener("input", backupNotes));
-    searchInput.addEventListener("input", renderNotes);
-    tagFilter.addEventListener("change", renderNotes);
-
-    logoutBtn.addEventListener("click", async () => {
-        if (confirm("Are you sure you want to logout?")) {
-            await backupNotes(); // save before logout
-            localStorage.removeItem("accessToken");
-            window.location.href = "index.html";
-        }
-    });
-
-    loadNotesLocal();
-    renderNotes();
-    await restoreNotes();
-};
-
 // ===== Handle Notes =====
 async function handleNoteSubmit(e) {
     e.preventDefault();
@@ -385,3 +324,74 @@ function handleNoteDelete() {
     toast("Note deleted ✔");
     backupNotes();
 }
+
+// ===== Auto Backup =====
+function setupAutoBackup(interval = 5000) {
+    setInterval(() => {
+        const currentNotes = JSON.stringify(notes);
+        if (currentNotes !== lastBackupNotes) {
+            backupNotes();
+        }
+    }, interval);
+}
+
+// ===== DOM Initialization =====
+window.onload = async () => {
+    notesGrid = document.getElementById("notesGrid");
+    noteDialog = document.getElementById("noteDialog");
+    noteForm = document.getElementById("noteForm");
+    noteIdInput = document.getElementById("noteId");
+    noteTitle = document.getElementById("noteTitle");
+    noteContent = document.getElementById("noteContent");
+    noteTags = document.getElementById("noteTags");
+    noteColor = document.getElementById("noteColor");
+    noteFilesInput = document.getElementById("noteFiles");
+    existingFilesDiv = document.getElementById("existingFiles");
+    searchInput = document.getElementById("searchInput");
+    tagFilter = document.getElementById("tagFilter");
+    deleteNoteBtn = document.getElementById("deleteNoteBtn");
+    logoutBtn = document.getElementById("logoutBtn");
+    installBtn = document.getElementById("installBtn");
+    emptyState = document.getElementById("emptyState");
+    closeNoteBtn = document.getElementById("closeNoteBtn");
+
+    fab = document.getElementById("fab");
+    fab.addEventListener("click", openNewNoteDialog);
+
+    syncIndicator = document.createElement("div");
+    syncIndicator.id = "syncIndicator";
+    syncIndicator.textContent = "Syncing...";
+    Object.assign(syncIndicator.style, {
+        position: "fixed", bottom: "20px", right: "20px",
+        background: "rgba(0,0,0,0.7)", color: "white",
+        padding: "10px 15px", borderRadius: "8px",
+        fontSize: "14px", display: "none"
+    });
+    document.body.appendChild(syncIndicator);
+
+    document.querySelectorAll(".color-btn").forEach(btn => {
+        btn.addEventListener("click", () => { noteColor.value = btn.dataset.color; });
+    });
+
+    noteForm.addEventListener("submit", handleNoteSubmit);
+    closeNoteBtn.addEventListener("click", () => noteDialog.close());
+    deleteNoteBtn.addEventListener("click", handleNoteDelete);
+    [noteTitle, noteContent, noteTags, noteColor, noteFilesInput].forEach(i => i.addEventListener("input", backupNotes));
+    searchInput.addEventListener("input", renderNotes);
+    tagFilter.addEventListener("change", renderNotes);
+
+    logoutBtn.addEventListener("click", async () => {
+        if (confirm("Are you sure you want to logout?")) {
+            await backupNotes();
+            localStorage.removeItem("accessToken");
+            window.location.href = "index.html";
+        }
+    });
+
+    loadNotesLocal();
+    renderNotes();
+    await restoreNotes();
+
+    // Start auto backup
+    setupAutoBackup(5000);
+};
