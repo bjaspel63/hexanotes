@@ -91,40 +91,43 @@ async function restoreNotes() {
             headers: { Authorization: `Bearer ${accessToken}` }
         });
 
+        let data;
         try {
-            const data = await res.json();
+            data = await res.json();
             if (!Array.isArray(data)) throw new Error("Invalid JSON structure");
-            notes = data;
         } catch (err) {
-            console.warn("Drive JSON invalid, auto-recovering...", err);
-            toast("Notes recovered from last known good state ✔");
-            notes = JSON.parse(localStorage.getItem("hexaNotes") || "[]");
-            await backupNotes(); // rewrite proper JSON to Drive
+            console.warn("Drive JSON invalid or corrupted, auto-recovering...", err);
+            toast("Notes file was invalid. Recovering from localStorage ✔");
+
+            // fallback to last saved localStorage version or empty array
+            data = JSON.parse(localStorage.getItem("hexaNotes") || "[]");
+            
+            // save clean structure back to Drive
+            notes = data;
+            await backupNotes();
         }
 
+        notes = data;
         saveNotesLocal();
         renderNotes();
     } catch (err) { 
-        console.warn("Restore failed", err); 
+        console.error("Restore failed", err); 
     }
 }
 
 // ===== Backup Notes =====
-const backupNotes = debounce(async () => {
-    if (!Array.isArray(notes)) {
-        console.warn("Notes array invalid, restoring from localStorage");
-        notes = JSON.parse(localStorage.getItem("hexaNotes") || "[]");
-    }
-
+async function backupNotes() {
     try {
         showSyncing();
         const ready = await ensureGapiAndToken();
-        if (!ready) { hideSyncing(); return; }
+        if (!ready) return;
 
         const folderId = await getOrCreateFolderByName(DRIVE_PRIMARY_FOLDER);
         let file = await findFileInFolder(folderId, DRIVE_PRIMARY_FILE);
 
-        const payload = new Blob([JSON.stringify(notes)], { type: 'application/json' });
+        // Always make sure notes is an array
+        const cleanNotes = Array.isArray(notes) ? notes : [];
+        const payload = new Blob([JSON.stringify(cleanNotes, null, 2)], { type: 'application/json' });
 
         if (file) {
             // Update existing file
@@ -136,7 +139,7 @@ const backupNotes = debounce(async () => {
             });
         } else {
             // Create new file
-            const metadata = { name: DRIVE_PRIMARY_FILE, parents: [folderId] };
+            const metadata = { name: DRIVE_PRIMARY_FILE, parents: [folderId], mimeType: 'application/json' };
             const formData = new FormData();
             formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
             formData.append('file', payload);
@@ -147,13 +150,14 @@ const backupNotes = debounce(async () => {
                 body: formData
             });
         }
+        toast("Notes synced to Drive ✔");
     } catch (err) {
-        console.warn("Backup failed", err);
-        toast("Backup failed ❌");
+        console.error("Backup failed", err);
+        toast("Sync failed ❌");
     } finally {
         hideSyncing();
     }
-}, 1000);
+}
 
 // ===== Render Notes =====
 function renderNotes() {
