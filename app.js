@@ -6,7 +6,7 @@ const DRIVE_LEGACY_FILE = "hexa-notes.json";
 
 // ===== Global Variables =====
 let notes = [];
-let accessToken = null; // will be set after gapi is ready
+let accessToken = null;
 const notesGrid = document.getElementById("notesGrid");
 const noteDialog = document.getElementById("noteDialog");
 const noteForm = document.getElementById("noteForm");
@@ -17,13 +17,21 @@ const noteTags = document.getElementById("noteTags");
 const noteColor = document.getElementById("noteColor");
 const searchInput = document.getElementById("searchInput");
 const tagFilter = document.getElementById("tagFilter");
-const newNoteBtn = document.getElementById("newNoteBtn");
 const deleteNoteBtn = document.getElementById("deleteNoteBtn");
 const logoutBtn = document.getElementById("logoutBtn");
 const installBtn = document.getElementById("installBtn");
 const emptyState = document.getElementById("emptyState");
 
-// Create a syncing indicator element
+// ===== Floating Add Note Button (FAB) =====
+const fab = document.createElement("button");
+fab.innerHTML = "+";
+fab.className = "fixed bottom-6 right-6 w-16 h-16 rounded-full bg-sky-600 text-white text-3xl shadow-lg flex items-center justify-center hover:bg-sky-700 transition";
+document.body.appendChild(fab);
+fab.addEventListener("click", () => {
+    openNewNoteDialog();
+});
+
+// ===== Sync Indicator =====
 const syncIndicator = document.createElement("div");
 syncIndicator.id = "syncIndicator";
 syncIndicator.textContent = "Syncing...";
@@ -38,15 +46,25 @@ syncIndicator.style.fontSize = "14px";
 syncIndicator.style.display = "none";
 document.body.appendChild(syncIndicator);
 
-// ===== Local Storage Helpers =====
-function saveNotes() { localStorage.setItem("hexaNotes", JSON.stringify(notes)); }
-function loadNotes() { notes = JSON.parse(localStorage.getItem("hexaNotes") || "[]"); }
+// ===== Helpers =====
+function toast(msg, duration = 2000) {
+    const t = document.createElement("div");
+    t.textContent = msg;
+    t.className = "fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-sky-500 text-white px-4 py-2 rounded shadow-lg z-50 animate-fade-in";
+    document.body.appendChild(t);
+    setTimeout(() => {
+        t.classList.add("opacity-0");
+        setTimeout(() => t.remove(), 500);
+    }, duration);
+}
 
-// ===== Small Helpers =====
-function toast(msg) { alert(msg); }
 function showSyncing() { syncIndicator.style.display = "block"; }
 function hideSyncing() { syncIndicator.style.display = "none"; }
 function isGapiReady() { return window.gapi && gapi.client && typeof gapi.client.request === "function"; }
+
+// ===== Local Storage =====
+function saveNotes() { localStorage.setItem("hexaNotes", JSON.stringify(notes)); }
+function loadNotes() { notes = JSON.parse(localStorage.getItem("hexaNotes") || "[]"); }
 
 // ===== Initialize GAPI + Token =====
 async function ensureGapiAndToken() {
@@ -87,7 +105,7 @@ async function findFileInFolder(folderId, fileName) {
     return res.result.files?.[0] || null;
 }
 
-// ===== Debounce Helper =====
+// ===== Debounce =====
 function debounce(fn, delay = 2000) {
     let timer;
     return (...args) => {
@@ -106,7 +124,6 @@ const autoBackup = debounce(async () => {
 
         const folderId = await getOrCreatePrimaryFolder();
         let file = await findFileInFolder(folderId, DRIVE_PRIMARY_FILE);
-
         const payload = new Blob([JSON.stringify(notes)], { type: 'application/json' });
 
         if (file) {
@@ -135,9 +152,9 @@ const autoBackup = debounce(async () => {
     } finally {
         hideSyncing();
     }
-}, 2000); // 2s debounce
+}, 2000);
 
-// ===== Restore =====
+// ===== Restore Notes =====
 async function restoreNotes() {
     try {
         const ready = await ensureGapiAndToken();
@@ -163,9 +180,7 @@ async function restoreNotes() {
         const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
             headers: { Authorization: `Bearer ${accessToken}` }
         });
-
         const data = await res.json();
-
         if (!Array.isArray(data)) {
             console.warn("Backup is corrupted or in wrong format. Skipping restore.");
             return;
@@ -180,7 +195,6 @@ async function restoreNotes() {
         console.warn("Restore failed, continuing with local notes.", err);
     }
 }
-
 
 // ===== Handle Drive Errors =====
 function handleDriveError(err, fallback = "Drive request failed.") {
@@ -248,8 +262,7 @@ function openNote(id) {
     noteDialog.showModal();
 }
 
-// ===== Event Listeners =====
-newNoteBtn.addEventListener("click", () => {
+function openNewNoteDialog() {
     noteIdInput.value = "";
     noteTitle.value = "";
     noteContent.value = "";
@@ -257,10 +270,17 @@ newNoteBtn.addEventListener("click", () => {
     noteColor.value = "#fef08a";
     deleteNoteBtn.style.display = "none";
     noteDialog.showModal();
-});
+}
 
+// ===== Event Listeners =====
 noteForm.addEventListener("submit", e => {
     e.preventDefault();
+    const title = noteTitle.value.trim();
+    if (!title) {
+        toast("Title cannot be empty ❌");
+        return;
+    }
+
     const id = noteIdInput.value;
     const tags = noteTags.value.split(",").map(t => t.trim()).filter(t => t);
     const colorValue = noteColor.value || "#fef08a";
@@ -268,42 +288,44 @@ noteForm.addEventListener("submit", e => {
     if (id) {
         const note = notes.find(n => n.id === id);
         if (!note) return;
-        note.title = noteTitle.value.trim();
+        note.title = title;
         note.content = noteContent.value.trim();
         note.tags = tags;
         note.color = colorValue;
+        toast("Note updated ✔");
     } else {
         notes.push({
             id: Date.now().toString(),
-            title: noteTitle.value.trim(),
+            title: title,
             content: noteContent.value.trim(),
             tags,
             color: colorValue
         });
+        toast("Note added ✔");
     }
 
     saveNotes();
     renderNotes();
     noteDialog.close();
-
     autoBackup();
 });
 
 deleteNoteBtn.addEventListener("click", () => {
     const id = noteIdInput.value;
-    notes = notes.filter(n => n.id !== id);
-    saveNotes();
-    renderNotes();
-    noteDialog.close();
+    const note = notes.find(n => n.id === id);
+    if (!note) return;
 
-    autoBackup();
-});
-
-[noteTitle, noteContent, noteTags, noteColor].forEach(input => {
-    input.addEventListener("input", () => {
+    if (confirm(`Are you sure you want to delete "${note.title}"? ❌`)) {
+        notes = notes.filter(n => n.id !== id);
+        saveNotes();
+        renderNotes();
+        noteDialog.close();
+        toast("Note deleted ✔");
         autoBackup();
-    });
+    }
 });
+
+[noteTitle, noteContent, noteTags, noteColor].forEach(input => input.addEventListener("input", autoBackup));
 
 searchInput.addEventListener("input", renderNotes);
 tagFilter.addEventListener("change", renderNotes);
@@ -332,11 +354,11 @@ installBtn.addEventListener("click", async () => {
 window.onload = async () => {
     loadNotes();
     renderNotes();
+
     if ('serviceWorker' in navigator) {
-        try { await navigator.serviceWorker.register('service-worker.js'); } 
+        try { await navigator.serviceWorker.register('service-worker.js'); }
         catch (e) { console.warn("SW registration failed", e); }
     }
 
-    // Restore from Drive on load automatically
     await restoreNotes();
 };
