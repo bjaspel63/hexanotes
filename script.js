@@ -1,177 +1,34 @@
-// ---------------------------
-// Firebase Setup
-// ---------------------------
-const firebaseConfig = {
-  apiKey: "AIzaSyDDwVueTk5RXBXqYPMMvWQcqj0IsgTRcfE",
-  authDomain: "hexanotes-27eed.firebaseapp.com",
-  projectId: "hexanotes-27eed",
-  storageBucket: "hexanotes-27eed.firebasestorage.app",
-  messagingSenderId: "551318569541",
-  appId: "1:551318569541:web:90bb0d78277962fb25d92c",
-  measurementId: "G-3JKXSGXWX5"
-};
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
+const CLIENT_ID = "95097301836-6v5mtlk740fgumquijro6h4ulra3eahi.apps.googleusercontent.com"; 
+let tokenClient, accessToken = null;
+const authArea = document.getElementById("authArea");
 
-// ---------------------------
-// Supabase Setup
-// ---------------------------
-const SUPABASE_URL = 'https://kwvyjdhsvwiywjmjafws.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt3dnlqZGhzdndpeXdqbWphZndzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4NzQwMTMsImV4cCI6MjA3MTQ1MDAxM30.SXsYUH7pl_QRGr36sUA1V806ZhZn4yc2n0jp0WZunc0';
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+function gapiLoaded() { gapi.load('client', initializeGapiClient); }
+async function initializeGapiClient() { await gapi.client.init({apiKey:'', discoveryDocs:["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"]}); }
 
-// ---------------------------
-// DOM Elements
-// ---------------------------
-const loginScreen = document.getElementById('login-screen');
-const appScreen = document.getElementById('app-screen');
-
-const loginBtn = document.getElementById('login-btn');
-const logoutBtn = document.getElementById('logout-btn');
-
-const notesContainer = document.getElementById('notes-container');
-const searchInput = document.getElementById('search-input');
-const addNoteBtn = document.getElementById('add-note-btn');
-
-const modal = document.getElementById('note-modal');
-const closeModal = document.querySelector('.close');
-const saveNoteBtn = document.getElementById('save-note-btn');
-const titleInput = document.getElementById('note-title');
-const contentInput = document.getElementById('note-content');
-const tagsInput = document.getElementById('note-tags');
-
-let currentUser = null;
-
-loginBtn.addEventListener('click', async () => {
-  try {
-    const provider = new firebase.auth.GoogleAuthProvider();
-    const result = await auth.signInWithPopup(provider);
-    console.log('User:', result.user);
-    alert(`Welcome ${result.user.displayName}`);
-  } catch(err) {
-    console.error(err);
-    alert(err.message);
-  }
-});
-
-// Logout
-logoutBtn.addEventListener('click', async () => {
-  await auth.signOut();
-});
-
-// Auth State
-auth.onAuthStateChanged(user => {
-  if (user) {
-    loginScreen.style.display = 'none';
-    appScreen.style.display = 'block';
-  } else {
-    loginScreen.style.display = 'flex';
-    appScreen.style.display = 'none';
-  }
-});
-
-// ---------------------------
-// Modal Open/Close
-// ---------------------------
-addNoteBtn.addEventListener('click', () => modal.style.display = 'block');
-closeModal.addEventListener('click', () => modal.style.display = 'none');
-window.addEventListener('click', e => {
-  if (e.target === modal) modal.style.display = 'none';
-});
-
-// ---------------------------
-// Save Note
-// ---------------------------
-saveNoteBtn.addEventListener('click', async () => {
-  const title = titleInput.value.trim();
-  const content = contentInput.value.trim();
-  const tags = tagsInput.value.split(',').map(t => t.trim()).filter(Boolean);
-  if (!title || !content || !currentUser) return;
-
-  const { error } = await supabase.from('notes')
-    .insert([{ title, content, tags, user_id: currentUser.uid }]);
-
-  if (error) alert(error.message);
-  else {
-    fetchNotes();
-    modal.style.display = 'none';
-    titleInput.value = '';
-    contentInput.value = '';
-    tagsInput.value = '';
-  }
-});
-
-// ---------------------------
-// Fetch & Render Notes
-// ---------------------------
-async function fetchNotes(term = '') {
-  if (!currentUser) return;
-
-  let query = supabase.from('notes').select('*')
-    .eq('user_id', currentUser.uid)
-    .order('created_at', { ascending: false });
-
-  if (term) query = query.ilike('title', `%${term}%`);
-
-  const { data, error } = await query;
-  if (error) console.error(error);
-  else renderNotes(data);
-}
-
-function renderNotes(notes) {
-  notesContainer.innerHTML = '';
-  notes.forEach(note => {
-    const card = document.createElement('div');
-    card.className = 'note-card';
-    card.innerHTML = `
-      <h3>${note.title}</h3>
-      <p>${note.content}</p>
-      <p class="tags">${note.tags?.join(',') || ''}</p>
-      <div class="actions">
-        <button class="edit-btn">Edit</button>
-        <button class="delete-btn">Delete</button>
-      </div>
-    `;
-    card.querySelector('.edit-btn').addEventListener('click', () => editNote(note));
-    card.querySelector('.delete-btn').addEventListener('click', () => deleteNote(note.id));
-    notesContainer.appendChild(card);
+function gisLoaded() {
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: 'https://www.googleapis.com/auth/drive.file',
+    callback: '',
   });
+  renderLoginButton();
 }
 
-// ---------------------------
-// Edit Note
-// ---------------------------
-async function editNote(note) {
-  const newTitle = prompt('New title:', note.title);
-  const newContent = prompt('New content:', note.content);
-  const newTags = prompt('New tags (comma separated):', note.tags?.join(',') || '');
-  if (!newTitle || !newContent) return;
-
-  const tagsArray = newTags.split(',').map(t => t.trim()).filter(Boolean);
-
-  const { error } = await supabase.from('notes')
-    .update({ title: newTitle, content: newContent, tags: tagsArray })
-    .eq('id', note.id)
-    .eq('user_id', currentUser.uid);
-
-  if (error) alert(error.message);
-  else fetchNotes();
+function renderLoginButton() {
+  authArea.innerHTML = '';
+  const btn = document.createElement("button");
+  btn.textContent = "Sign in with Google";
+  btn.className = "px-6 py-3 rounded-2xl bg-gradient-to-r from-red-500 to-red-600 text-white shadow hover:scale-105 transition transform";
+  btn.onclick = () => {
+    tokenClient.callback = (resp) => {
+      if (resp.error) throw(resp);
+      accessToken = resp.access_token;
+      localStorage.setItem("accessToken", accessToken);
+      window.location.href = "main.html";
+    };
+    if (!accessToken) tokenClient.requestAccessToken({prompt: 'consent'});
+  };
+  authArea.appendChild(btn);
 }
 
-// ---------------------------
-// Delete Note
-// ---------------------------
-async function deleteNote(id) {
-  if (!confirm('Delete this note?')) return;
-  const { error } = await supabase.from('notes')
-    .delete()
-    .eq('id', id)
-    .eq('user_id', currentUser.uid);
-  if (error) alert(error.message);
-  else fetchNotes();
-}
-
-// ---------------------------
-// Search Notes
-// ---------------------------
-searchInput.addEventListener('input', e => fetchNotes(e.target.value.trim()));
+window.onload = () => { gapiLoaded(); gisLoaded(); };
