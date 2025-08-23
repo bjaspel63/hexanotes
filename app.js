@@ -7,6 +7,7 @@ const DRIVE_LEGACY_FILE = "hexa-notes.json";
 // ===== Global Variables =====
 let notes = [];
 let accessToken = null;
+
 const notesGrid = document.getElementById("notesGrid");
 const noteDialog = document.getElementById("noteDialog");
 const noteForm = document.getElementById("noteForm");
@@ -15,6 +16,7 @@ const noteTitle = document.getElementById("noteTitle");
 const noteContent = document.getElementById("noteContent");
 const noteTags = document.getElementById("noteTags");
 const noteColor = document.getElementById("noteColor");
+const noteFilesInput = document.getElementById("noteFiles"); // new file input
 const searchInput = document.getElementById("searchInput");
 const tagFilter = document.getElementById("tagFilter");
 const deleteNoteBtn = document.getElementById("deleteNoteBtn");
@@ -33,15 +35,17 @@ fab.addEventListener("click", () => openNewNoteDialog());
 const syncIndicator = document.createElement("div");
 syncIndicator.id = "syncIndicator";
 syncIndicator.textContent = "Syncing...";
-syncIndicator.style.position = "fixed";
-syncIndicator.style.bottom = "20px";
-syncIndicator.style.right = "20px";
-syncIndicator.style.background = "rgba(0,0,0,0.7)";
-syncIndicator.style.color = "white";
-syncIndicator.style.padding = "10px 15px";
-syncIndicator.style.borderRadius = "8px";
-syncIndicator.style.fontSize = "14px";
-syncIndicator.style.display = "none";
+Object.assign(syncIndicator.style, {
+    position: "fixed",
+    bottom: "20px",
+    right: "20px",
+    background: "rgba(0,0,0,0.7)",
+    color: "white",
+    padding: "10px 15px",
+    borderRadius: "8px",
+    fontSize: "14px",
+    display: "none"
+});
 document.body.appendChild(syncIndicator);
 
 // ===== Helpers =====
@@ -55,7 +59,6 @@ function toast(msg, duration = 2000) {
         setTimeout(() => t.remove(), 500);
     }, duration);
 }
-
 function showSyncing() { syncIndicator.style.display = "block"; }
 function hideSyncing() { syncIndicator.style.display = "none"; }
 function isGapiReady() { return window.gapi && gapi.client && typeof gapi.client.request === "function"; }
@@ -131,7 +134,6 @@ const autoBackup = debounce(async () => {
                 params: { uploadType: 'media' },
                 body: payload
             });
-            console.log("Auto-backup updated ✔");
         } else {
             const metadata = { name: DRIVE_PRIMARY_FILE, parents: [folderId] };
             const formData = new FormData();
@@ -142,14 +144,10 @@ const autoBackup = debounce(async () => {
                 "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink",
                 { method: 'POST', headers: { Authorization: `Bearer ${accessToken}` }, body: formData }
             );
-            console.log("Auto-backup created ✔");
         }
 
-    } catch (err) {
-        console.warn("Auto-backup failed:", err);
-    } finally {
-        hideSyncing();
-    }
+    } catch (err) { console.warn("Auto-backup failed:", err); }
+    finally { hideSyncing(); }
 }, 2000);
 
 // ===== Restore Notes =====
@@ -170,43 +168,17 @@ async function restoreNotes() {
             if (legacyFolderId) file = await findFileInFolder(legacyFolderId, DRIVE_LEGACY_FILE);
         }
 
-        if (!file) {
-            console.log("No backup found. Skipping restore.");
-            return;
-        }
+        if (!file) return;
 
         const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
             headers: { Authorization: `Bearer ${accessToken}` }
         });
         const data = await res.json();
-        if (!Array.isArray(data)) {
-            console.warn("Backup is corrupted or in wrong format. Skipping restore.");
-            return;
-        }
-
+        if (!Array.isArray(data)) return;
         notes = data;
         saveNotes();
         renderNotes();
-        console.log("Restore complete ✔");
-
-    } catch (err) {
-        console.warn("Restore failed, continuing with local notes.", err);
-    }
-}
-
-// ===== Handle Drive Errors =====
-function handleDriveError(err, fallback = "Drive request failed.") {
-    console.warn("Drive error:", err);
-    try {
-        const code = err?.status || err?.result?.error?.code;
-        if (code === 401 || code === 403) {
-            toast("Session expired or permission denied. Login again.");
-            localStorage.removeItem("accessToken");
-            window.location.href = "index.html";
-            return;
-        }
-    } catch (_) { }
-    toast(fallback);
+    } catch (err) { console.warn("Restore failed", err); }
 }
 
 // ===== Notes Rendering =====
@@ -234,24 +206,21 @@ function renderNotes() {
             <h3 class="text-lg font-bold">${note.title || ""}</h3>
             <p class="mt-2 text-sm break-words">${note.content || ""}</p>
             <div class="mt-3 flex flex-wrap gap-1">${note.tags?.map(t => `<span class="tag-chip">${t}</span>`).join('') || ''}</div>
+            <div class="mt-3 note-files">
+                ${note.files?.map(f => {
+                    if(f.type.startsWith("image/")) return `<img src="${f.url}" class="w-full rounded-lg mb-2">`;
+                    if(f.type === "application/pdf") return `<a href="${f.url}" target="_blank" class="text-blue-600 underline">${f.name}</a>`;
+                    if(f.type.startsWith("video/")) return `<video src="${f.url}" controls class="w-full rounded-lg mb-2"></video>`;
+                    return `<a href="${f.url}" target="_blank" class="text-blue-600 underline">${f.name}</a>`;
+                }).join('') || ''}
+            </div>
         `;
-
-        // Add pop-in animation
-        div.style.transform = "scale(0.8)";
-        div.style.opacity = "0";
-        div.style.transition = "all 0.3s ease-out";
-        setTimeout(() => {
-            div.style.transform = "scale(1)";
-            div.style.opacity = "1";
-        }, 10);
-
         div.addEventListener("click", () => openNote(note.id));
         notesGrid.appendChild(div);
     });
 
     renderTagFilter();
 }
-
 
 function renderTagFilter() {
     const tags = [...new Set(notes.flatMap(n => n.tags || []))];
@@ -266,7 +235,7 @@ function openNote(id) {
     noteTitle.value = note.title || "";
     noteContent.value = note.content || "";
     noteTags.value = note.tags?.join(", ") || "";
-    noteColor.value = (note.color && note.color.startsWith("#")) ? note.color : "#fef08a";
+    noteColor.value = note.color || "#fef08a";
     deleteNoteBtn.style.display = "inline-block";
     noteDialog.showModal();
 }
@@ -277,12 +246,13 @@ function openNewNoteDialog() {
     noteContent.value = "";
     noteTags.value = "";
     noteColor.value = "#fef08a";
+    noteFilesInput.value = "";
     deleteNoteBtn.style.display = "none";
     noteDialog.showModal();
 }
 
 // ===== Event Listeners =====
-noteForm.addEventListener("submit", e => {
+noteForm.addEventListener("submit", async e => {
     e.preventDefault();
     const title = noteTitle.value.trim();
     if (!title) { toast("Title cannot be empty ❌"); return; }
@@ -291,6 +261,13 @@ noteForm.addEventListener("submit", e => {
     const tags = noteTags.value.split(",").map(t => t.trim()).filter(t => t);
     const colorValue = noteColor.value || "#fef08a";
 
+    // Handle file attachments
+    const filesArray = Array.from(noteFilesInput.files).map(f => ({
+        name: f.name,
+        type: f.type,
+        url: URL.createObjectURL(f)
+    }));
+
     if (id) {
         const note = notes.find(n => n.id === id);
         if (!note) return;
@@ -298,6 +275,7 @@ noteForm.addEventListener("submit", e => {
         note.content = noteContent.value.trim();
         note.tags = tags;
         note.color = colorValue;
+        note.files = filesArray;
         toast("Note updated ✔");
     } else {
         notes.push({
@@ -305,7 +283,8 @@ noteForm.addEventListener("submit", e => {
             title: title,
             content: noteContent.value.trim(),
             tags,
-            color: colorValue
+            color: colorValue,
+            files: filesArray
         });
         toast("Note added ✔");
     }
@@ -318,41 +297,15 @@ noteForm.addEventListener("submit", e => {
 
 deleteNoteBtn.addEventListener("click", () => {
     const id = noteIdInput.value;
-    const note = notes.find(n => n.id === id);
-    if (!note) return;
-
-    if (confirm(`Are you sure you want to delete "${note.title}"? ❌`)) {
-        const noteDiv = Array.from(notesGrid.children).find(div => {
-            return div.querySelector("h3")?.textContent === note.title;
-        });
-
-        if (noteDiv) {
-            // Add pop-out animation
-            noteDiv.style.transition = "all 0.3s ease";
-            noteDiv.style.transform = "scale(0.8)";
-            noteDiv.style.opacity = "0";
-            setTimeout(() => {
-                notes = notes.filter(n => n.id !== id);
-                saveNotes();
-                renderNotes();
-                noteDialog.close();
-                toast("Note deleted ✔");
-                autoBackup();
-            }, 300); // Match transition duration
-        } else {
-            // Fallback if note div not found
-            notes = notes.filter(n => n.id !== id);
-            saveNotes();
-            renderNotes();
-            noteDialog.close();
-            toast("Note deleted ✔");
-            autoBackup();
-        }
-    }
+    notes = notes.filter(n => n.id !== id);
+    saveNotes();
+    renderNotes();
+    noteDialog.close();
+    toast("Note deleted ✔");
+    autoBackup();
 });
 
-
-[noteTitle, noteContent, noteTags, noteColor].forEach(input => input.addEventListener("input", autoBackup));
+[noteTitle, noteContent, noteTags, noteColor, noteFilesInput].forEach(input => input.addEventListener("input", autoBackup));
 
 searchInput.addEventListener("input", renderNotes);
 tagFilter.addEventListener("change", renderNotes);
