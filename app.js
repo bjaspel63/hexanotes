@@ -1,8 +1,6 @@
 // ======== Config ========
 const DRIVE_PRIMARY_FOLDER = "HexaNotes";
 const DRIVE_PRIMARY_FILE = "notes.json";
-const DRIVE_LEGACY_FOLDER = "HexaNotesBackup";
-const DRIVE_LEGACY_FILE = "hexa-notes.json";
 
 // ===== Color Options =====
 const COLOR_OPTIONS = [
@@ -32,10 +30,8 @@ function toast(msg, duration = 2000) {
         setTimeout(() => t.remove(), 500);
     }, duration);
 }
-
 function showSyncing() { syncIndicator.style.display = "block"; }
 function hideSyncing() { syncIndicator.style.display = "none"; }
-function isGapiReady() { return window.gapi && gapi.client && typeof gapi.client.request === "function"; }
 
 // ===== Local Storage =====
 function saveNotes() { localStorage.setItem("hexaNotes", JSON.stringify(notes)); }
@@ -44,9 +40,7 @@ function loadNotes() { notes = JSON.parse(localStorage.getItem("hexaNotes") || "
 // ===== Initialize GAPI + Token =====
 async function ensureGapiAndToken() {
     await new Promise(res => gapi.load('client', res));
-    await gapi.client.init({
-        discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"]
-    });
+    await gapi.client.init({ discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"] });
     accessToken = localStorage.getItem("accessToken");
     if (!accessToken) {
         toast("Login required.");
@@ -61,8 +55,7 @@ async function ensureGapiAndToken() {
 async function getOrCreateFolderByName(name) {
     const res = await gapi.client.drive.files.list({
         q: `name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-        fields: "files(id,name)",
-        spaces: "drive"
+        fields: "files(id,name)", spaces: "drive"
     });
     if (res.result.files?.length) return res.result.files[0].id;
     const folder = await gapi.client.drive.files.create({
@@ -98,30 +91,54 @@ const autoBackup = debounce(async () => {
         if (!ready) { hideSyncing(); return; }
 
         const folderId = await getOrCreatePrimaryFolder();
-        let file = await findFileInFolder(folderId, DRIVE_PRIMARY_FILE);
-        const payload = new Blob([JSON.stringify(notes)], { type: 'application/json' });
 
-        if (file) {
-            await gapi.client.request({
-                path: `/upload/drive/v3/files/${file.id}`,
-                method: 'PATCH',
-                params: { uploadType: 'media' },
-                body: payload
-            });
-        } else {
-            const metadata = { name: DRIVE_PRIMARY_FILE, parents: [folderId] };
-            const formData = new FormData();
-            formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-            formData.append('file', payload);
+        // Upload files and get webViewLink
+        for (let note of notes) {
+            if (!note.files) note.files = [];
+            for (let i = 0; i < note.files.length; i++) {
+                const f = note.files[i];
+                if (f.url && f.url.startsWith("https://")) continue; // Already uploaded
 
-            await fetch(
-                "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink",
-                { method: 'POST', headers: { Authorization: `Bearer ${accessToken}` }, body: formData }
-            );
+                if (!f.fileObject) continue; // Skip if no file object
+
+                const fileMetadata = { name: f.name, parents: [folderId] };
+                const formData = new FormData();
+                formData.append("metadata", new Blob([JSON.stringify(fileMetadata)], { type: "application/json" }));
+                formData.append("file", f.fileObject);
+
+                const res = await fetch(
+                    "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink",
+                    { method: "POST", headers: { Authorization: `Bearer ${accessToken}` }, body: formData }
+                );
+                const data = await res.json();
+                f.url = data.webViewLink; // Replace blob URL with Drive link
+                delete f.fileObject; // remove fileObject to save memory
+            }
         }
 
-    } catch (err) { console.warn("Auto-backup failed:", err); }
-    finally { hideSyncing(); }
+        // Save notes.json
+        let file = await findFileInFolder(folderId, DRIVE_PRIMARY_FILE);
+        const payload = JSON.stringify(notes);
+
+        if (file) {
+            await gapi.client.drive.files.update({
+                fileId: file.id,
+                uploadType: 'media',
+                resource: { mimeType: "application/json" },
+                media: { body: payload }
+            });
+        } else {
+            await gapi.client.drive.files.create({
+                resource: { name: DRIVE_PRIMARY_FILE, parents: [folderId], mimeType: "application/json" },
+                media: { mimeType: "application/json", body: payload },
+                fields: "id, webViewLink"
+            });
+        }
+
+        console.log("Backup complete");
+    } catch (err) {
+        console.warn("Auto-backup failed:", err);
+    } finally { hideSyncing(); }
 }, 2000);
 
 // ===== Restore Notes =====
@@ -130,18 +147,8 @@ async function restoreNotes() {
         const ready = await ensureGapiAndToken();
         if (!ready) return;
 
-        const primaryFolderId = await getOrCreatePrimaryFolder();
-        let file = await findFileInFolder(primaryFolderId, DRIVE_PRIMARY_FILE);
-
-        if (!file) {
-            const legacySearch = await gapi.client.drive.files.list({
-                q: `name='${DRIVE_LEGACY_FOLDER}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-                fields: "files(id,name)"
-            });
-            const legacyFolderId = legacySearch.result.files?.[0]?.id || null;
-            if (legacyFolderId) file = await findFileInFolder(legacyFolderId, DRIVE_LEGACY_FILE);
-        }
-
+        const folderId = await getOrCreatePrimaryFolder();
+        let file = await findFileInFolder(folderId, DRIVE_PRIMARY_FILE);
         if (!file) return;
 
         const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
@@ -149,10 +156,13 @@ async function restoreNotes() {
         });
         const data = await res.json();
         if (!Array.isArray(data)) return;
+
         notes = data;
         saveNotes();
         renderNotes();
-    } catch (err) { console.warn("Restore failed", err); }
+    } catch (err) {
+        console.warn("Restore failed", err);
+    }
 }
 
 // ===== Notes Rendering =====
@@ -187,7 +197,7 @@ function renderNotes() {
 
         div.innerHTML = `
             <h3 class="text-lg font-bold">${note.title || ""}</h3>
-            <p class="mt-2 text-sm break-words">${linkedContent}</p>
+            <p class="mt-2 text-sm break-words content-display">${linkedContent}</p>
             <div class="mt-3 flex flex-wrap gap-1">
                 ${note.tags?.map(t => `<span class="tag-chip" style="color:${colorOption.textColor}; border-color:${colorOption.textColor}">${t}</span>`).join('') || ''}
             </div>
@@ -200,6 +210,7 @@ function renderNotes() {
                 }).join('') || ''}
             </div>
         `;
+        div.querySelector(".content-display").addEventListener("click", e => e.stopPropagation()); // prevent dialog open
         div.addEventListener("click", () => openNote(note.id));
         notesGrid.appendChild(div);
     });
@@ -217,12 +228,17 @@ function renderTagFilter() {
 function openNote(id) {
     const note = notes.find(n => n.id === id);
     if (!note) return;
+
     noteIdInput.value = note.id;
     noteTitle.value = note.title || "";
     noteContent.value = note.content || "";
     noteTags.value = note.tags?.join(", ") || "";
     noteColor.value = note.color || COLOR_OPTIONS[0].value;
+
+    // Populate file list (display only, cannot edit existing files)
     noteFilesInput.value = "";
+    if(note.files) console.log("Existing files:", note.files); // optional: show file names somewhere
+
     deleteNoteBtn.style.display = "inline-block";
     noteDialog.showModal();
 }
@@ -238,7 +254,7 @@ function openNewNoteDialog() {
     noteDialog.showModal();
 }
 
-// ===== Initialize DOM-dependent elements =====
+// ===== Initialize DOM =====
 window.onload = async () => {
     notesGrid = document.getElementById("notesGrid");
     noteDialog = document.getElementById("noteDialog");
@@ -266,23 +282,14 @@ window.onload = async () => {
     syncIndicator = document.createElement("div");
     syncIndicator.id = "syncIndicator";
     syncIndicator.textContent = "Syncing...";
-    Object.assign(syncIndicator.style, {
-        position: "fixed",
-        bottom: "20px",
-        right: "20px",
-        background: "rgba(0,0,0,0.7)",
-        color: "white",
-        padding: "10px 15px",
-        borderRadius: "8px",
-        fontSize: "14px",
-        display: "none"
-    });
+    Object.assign(syncIndicator.style, { position:"fixed", bottom:"20px", right:"20px", background:"rgba(0,0,0,0.7)", color:"white", padding:"10px 15px", borderRadius:"8px", fontSize:"14px", display:"none" });
     document.body.appendChild(syncIndicator);
 
-    // Correct color selection
+    // Color buttons
     document.querySelectorAll(".color-btn").forEach(btn => {
         btn.addEventListener("click", () => {
-            noteColor.value = btn.dataset.color;
+            const selectedColor = COLOR_OPTIONS.find(c => c.gradient === btn.style.background);
+            if(selectedColor) noteColor.value = selectedColor.value;
         });
     });
 
@@ -294,34 +301,14 @@ window.onload = async () => {
     tagFilter.addEventListener("change", renderNotes);
 
     logoutBtn.addEventListener("click", () => {
-        if (confirm("Are you sure you want to logout?")) {
+        if(confirm("Are you sure you want to logout?")){
             localStorage.removeItem("accessToken");
-            window.location.href = "index.html";
+            window.location.href="index.html";
         }
-    });
-
-    let deferredPrompt;
-    window.addEventListener('beforeinstallprompt', e => {
-        e.preventDefault();
-        deferredPrompt = e;
-        installBtn.classList.remove("hidden");
-    });
-    installBtn.addEventListener("click", async () => {
-        if (!deferredPrompt) return;
-        deferredPrompt.prompt();
-        await deferredPrompt.userChoice;
-        installBtn.classList.add("hidden");
-        deferredPrompt = null;
     });
 
     loadNotes();
     renderNotes();
-
-    if ('serviceWorker' in navigator) {
-        try { await navigator.serviceWorker.register('service-worker.js'); }
-        catch (e) { console.warn("SW registration failed", e); }
-    }
-
     await restoreNotes();
 };
 
@@ -337,7 +324,7 @@ async function handleNoteSubmit(e) {
     const filesArray = Array.from(noteFilesInput.files).map(f => ({
         name: f.name,
         type: f.type,
-        url: URL.createObjectURL(f)
+        fileObject: f
     }));
 
     if (id) {
@@ -347,7 +334,7 @@ async function handleNoteSubmit(e) {
         note.content = noteContent.value.trim();
         note.tags = tags;
         note.color = colorValue;
-        note.files = filesArray;
+        note.files = [...(note.files || []), ...filesArray]; // append new files
         toast("Note updated ✔");
     } else {
         notes.push({
