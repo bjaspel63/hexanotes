@@ -155,20 +155,32 @@ async function restoreNotes() {
             if (legacyFolderId) file = await findFileInFolder(legacyFolderId, DRIVE_LEGACY_FILE);
         }
 
-        if (!file) return toast("No backup found in Drive.");
+        if (!file) {
+            console.log("No backup found. Skipping restore.");
+            return;
+        }
 
         const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
             headers: { Authorization: `Bearer ${accessToken}` }
         });
+
         const data = await res.json();
-        if (!Array.isArray(data)) throw new Error("Backup corrupted or unexpected format.");
+
+        if (!Array.isArray(data)) {
+            console.warn("Backup is corrupted or in wrong format. Skipping restore.");
+            return;
+        }
 
         notes = data;
         saveNotes();
         renderNotes();
-        toast("Restore complete ✔");
-    } catch (err) { handleDriveError(err, "Restore failed."); }
+        console.log("Restore complete ✔");
+
+    } catch (err) {
+        console.warn("Restore failed, continuing with local notes.", err);
+    }
 }
+
 
 // ===== Handle Drive Errors =====
 function handleDriveError(err, fallback = "Drive request failed.") {
