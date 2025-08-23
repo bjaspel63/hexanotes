@@ -1,204 +1,204 @@
-// ================== GLOBAL VARIABLES ==================
-let notes = JSON.parse(localStorage.getItem("notes")) || [];
-let selectedColor = "";
-let currentUser = null;
+// ==========================
+// HexaNotes App
+// ==========================
 
-// DOM Elements
-const notesGrid = document.getElementById("notesGrid");
-const emptyState = document.getElementById("emptyState");
+// Google API config
+const CLIENT_ID = "95097301836-6v5mtlk740fgumquijro6h4ulra3eahi.apps.googleusercontent.com";
+const API_KEY = "AIzaSyAIQ9iQTSVyaDNlxbay4pnlAmq9oqlnxfc";
+const SCOPES = "https://www.googleapis.com/auth/drive.file";
+let tokenClient, gapiInited = false, gisInited = false;
+let driveFolderId = null;
+
+const notesKey = "hexaNotes";
+let notes = [];
+
+// Elements
 const fab = document.getElementById("fab");
 const noteDialog = document.getElementById("noteDialog");
 const noteForm = document.getElementById("noteForm");
 const noteIdInput = document.getElementById("noteId");
-const noteTitleInput = document.getElementById("noteTitle");
-const noteContentInput = document.getElementById("noteContent");
-const noteFilesInput = document.getElementById("noteFiles");
-const noteTagsInput = document.getElementById("noteTags");
-const noteColorInput = document.getElementById("noteColor");
-const noteColorOptions = document.querySelectorAll(".color-btn");
-const deleteNoteBtn = document.getElementById("deleteNoteBtn");
+const noteTitle = document.getElementById("noteTitle");
+const noteContent = document.getElementById("noteContent");
+const noteTags = document.getElementById("noteTags");
+const noteFiles = document.getElementById("noteFiles");
+const noteColor = document.getElementById("noteColor");
+const noteColorOptions = document.getElementById("noteColorOptions");
+const notesGrid = document.getElementById("notesGrid");
+const emptyState = document.getElementById("emptyState");
 const closeNoteBtn = document.getElementById("closeNoteBtn");
+const deleteNoteBtn = document.getElementById("deleteNoteBtn");
 const searchInput = document.getElementById("searchInput");
 const tagFilter = document.getElementById("tagFilter");
-const logoutBtn = document.getElementById("logoutBtn");
 
-// ================== HELPERS ==================
-function saveNotes() {
-  localStorage.setItem("notes", JSON.stringify(notes));
+// ==========================
+// Init Google API
+// ==========================
+window.onload = () => {
+  gapi.load("client", initClient);
+};
+
+async function initClient() {
+  await gapi.client.init({
+    apiKey: API_KEY,
+    discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"],
+  });
+  gapiInited = true;
+
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: SCOPES,
+    callback: async (tokenResponse) => {
+      if (tokenResponse && tokenResponse.access_token) {
+        await ensureDriveFolder();
+        await loadBackup();
+      }
+    },
+  });
+
+  // Trigger login immediately
+  tokenClient.requestAccessToken();
 }
 
-function toast(message) {
-  const t = document.createElement("div");
-  t.className =
-    "fixed bottom-6 left-1/2 -translate-x-1/2 bg-sky-600 text-white px-4 py-2 rounded-xl shadow-lg animate-fade";
-  t.textContent = message;
-  document.body.appendChild(t);
-  setTimeout(() => t.remove(), 2500);
-}
+// ==========================
+// Drive Helpers
+// ==========================
+async function ensureDriveFolder() {
+  let response = await gapi.client.drive.files.list({
+    q: "mimeType='application/vnd.google-apps.folder' and name='HexaNotes' and trashed=false",
+    fields: "files(id, name)",
+  });
 
-function generateId() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-}
-
-// ================== RENDER NOTES ==================
-function renderNotes() {
-  notesGrid.innerHTML = "";
-  const search = searchInput.value.toLowerCase();
-  const selectedTag = tagFilter.value;
-
-  let filtered = notes.filter(
-    (n) =>
-      n.title.toLowerCase().includes(search) ||
-      n.content.toLowerCase().includes(search) ||
-      n.tags.some((t) => t.toLowerCase().includes(search))
-  );
-
-  if (selectedTag) {
-    filtered = filtered.filter((n) => n.tags.includes(selectedTag));
-  }
-
-  if (filtered.length === 0) {
-    emptyState.classList.remove("hidden");
+  if (response.result.files && response.result.files.length > 0) {
+    driveFolderId = response.result.files[0].id;
   } else {
-    emptyState.classList.add("hidden");
+    let folder = await gapi.client.drive.files.create({
+      resource: {
+        name: "HexaNotes",
+        mimeType: "application/vnd.google-apps.folder",
+      },
+      fields: "id",
+    });
+    driveFolderId = folder.result.id;
   }
-
-  filtered.forEach((note) => {
-    const card = document.createElement("div");
-    card.className =
-      "p-4 rounded-2xl shadow hover:shadow-lg transition relative";
-    card.style.background = note.color || "linear-gradient(135deg,#fff,#eee)";
-
-    // Edit button (prevents accidental open)
-    const editBtn = document.createElement("button");
-    editBtn.innerHTML = "✏️";
-    editBtn.className =
-      "absolute top-2 right-2 bg-white/80 hover:bg-white text-slate-700 rounded-full px-2 shadow";
-    editBtn.addEventListener("click", () => openNoteDialog(note));
-    card.appendChild(editBtn);
-
-    // Title
-    const title = document.createElement("h2");
-    title.className = "font-bold text-lg mb-1";
-    title.textContent = note.title;
-    card.appendChild(title);
-
-    // Content (render links as <a>)
-    const content = document.createElement("p");
-    content.className = "text-sm mb-2 whitespace-pre-wrap";
-    content.innerHTML = note.content.replace(
-      /(https?:\/\/[^\s]+)/g,
-      '<a href="$1" target="_blank" class="text-sky-700 underline">$1</a>'
-    );
-    card.appendChild(content);
-
-    // Files
-    if (note.files && note.files.length > 0) {
-      const fileList = document.createElement("div");
-      fileList.className = "space-y-2 mt-2";
-      note.files.forEach((file) => {
-        const fileLink = document.createElement("a");
-        fileLink.href = file.driveUrl || "#";
-        fileLink.target = "_blank";
-        fileLink.className =
-          "block p-2 bg-white/60 rounded hover:bg-white shadow";
-
-        if (file.type.startsWith("image/")) {
-          const img = document.createElement("img");
-          img.src = file.driveUrl;
-          img.className = "rounded max-h-40 object-cover";
-          fileLink.appendChild(img);
-        } else if (file.type.startsWith("video/")) {
-          const vid = document.createElement("video");
-          vid.src = file.driveUrl;
-          vid.controls = true;
-          vid.className = "rounded max-h-40";
-          fileLink.appendChild(vid);
-        } else {
-          fileLink.textContent = file.name;
-        }
-        fileList.appendChild(fileLink);
-      });
-      card.appendChild(fileList);
-    }
-
-    // Tags
-    if (note.tags.length > 0) {
-      const tagDiv = document.createElement("div");
-      tagDiv.className = "mt-2 flex flex-wrap gap-1";
-      note.tags.forEach((t) => {
-        const span = document.createElement("span");
-        span.className =
-          "px-2 py-1 bg-sky-100 text-sky-700 rounded-full text-xs";
-        span.textContent = t;
-        tagDiv.appendChild(span);
-      });
-      card.appendChild(tagDiv);
-    }
-
-    notesGrid.appendChild(card);
-  });
-  populateTagFilter();
 }
 
-function populateTagFilter() {
-  const allTags = new Set();
-  notes.forEach((n) => n.tags.forEach((t) => allTags.add(t)));
-  tagFilter.innerHTML = '<option value="">All Tags</option>';
-  allTags.forEach((t) => {
-    const opt = document.createElement("option");
-    opt.value = t;
-    opt.textContent = t;
-    tagFilter.appendChild(opt);
-  });
+async function uploadFileToDrive(file) {
+  const metadata = {
+    name: file.name,
+    parents: [driveFolderId],
+  };
+  const form = new FormData();
+  form.append(
+    "metadata",
+    new Blob([JSON.stringify(metadata)], { type: "application/json" })
+  );
+  form.append("file", file);
+
+  const res = await fetch(
+    "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart",
+    {
+      method: "POST",
+      headers: new Headers({
+        Authorization: "Bearer " + gapi.client.getToken().access_token,
+      }),
+      body: form,
+    }
+  );
+  const data = await res.json();
+  return `https://drive.google.com/uc?id=${data.id}`;
 }
 
-// ================== NOTE DIALOG ==================
-function openNewNoteDialog() {
+async function saveBackup() {
+  const backupData = JSON.stringify(notes);
+  const existing = await gapi.client.drive.files.list({
+    q: `'${driveFolderId}' in parents and name='hexaNotesBackup.json' and trashed=false`,
+    fields: "files(id)",
+  });
+
+  if (existing.result.files.length > 0) {
+    await gapi.client.request({
+      path: `/upload/drive/v3/files/${existing.result.files[0].id}`,
+      method: "PATCH",
+      params: { uploadType: "media" },
+      body: backupData,
+    });
+  } else {
+    await gapi.client.drive.files.create({
+      resource: {
+        name: "hexaNotesBackup.json",
+        parents: [driveFolderId],
+        mimeType: "application/json",
+      },
+      media: {
+        mimeType: "application/json",
+        body: backupData,
+      },
+    });
+  }
+}
+
+async function loadBackup() {
+  const existing = await gapi.client.drive.files.list({
+    q: `'${driveFolderId}' in parents and name='hexaNotesBackup.json' and trashed=false`,
+    fields: "files(id, name)",
+  });
+
+  if (existing.result.files.length > 0) {
+    const fileId = existing.result.files[0].id;
+    const response = await gapi.client.drive.files.get({
+      fileId: fileId,
+      alt: "media",
+    });
+    notes = response.result || [];
+    renderNotes();
+  }
+}
+
+// ==========================
+// Notes Handling
+// ==========================
+fab.addEventListener("click", () => {
   noteForm.reset();
   noteIdInput.value = "";
-  noteColorInput.value = "";
-  selectedColor = "";
+  noteColor.value = "";
+  noteFiles.value = "";
   noteDialog.showModal();
-}
+});
 
-function openNoteDialog(note) {
-  noteIdInput.value = note.id;
-  noteTitleInput.value = note.title;
-  noteContentInput.value = note.content;
-  noteTagsInput.value = note.tags.join(", ");
-  noteColorInput.value = note.color || "";
-  selectedColor = note.color || "";
-  noteFilesInput.value = ""; // reset (avoid showing prev)
-  noteDialog.showModal();
-}
+noteColorOptions.querySelectorAll(".color-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    noteColor.value = btn.dataset.color;
+    noteColorOptions
+      .querySelectorAll(".color-btn")
+      .forEach((b) => b.classList.remove("ring-4", "ring-sky-500"));
+    btn.classList.add("ring-4", "ring-sky-500");
+  });
+});
 
-// ================== FORM SUBMIT ==================
+closeNoteBtn.addEventListener("click", () => noteDialog.close());
+
+deleteNoteBtn.addEventListener("click", async () => {
+  if (!noteIdInput.value) return;
+  if (!confirm("Are you sure you want to delete this note?")) return;
+  notes = notes.filter((n) => n.id !== noteIdInput.value);
+  await saveBackup();
+  renderNotes();
+  noteDialog.close();
+});
+
 noteForm.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const id = noteIdInput.value || generateId();
-  const title = noteTitleInput.value.trim();
-  if (!title) {
-    alert("Title cannot be empty");
-    return;
-  }
-  const content = noteContentInput.value.trim();
-  const tags = noteTagsInput.value
-    .split(",")
-    .map((t) => t.trim())
-    .filter((t) => t);
+
+  let id = noteIdInput.value || Date.now().toString();
+  let title = noteTitle.value.trim();
+  let content = noteContent.value.trim();
+  let tags = noteTags.value.split(",").map((t) => t.trim()).filter(Boolean);
+  let color = noteColor.value || "#ffffff";
 
   let files = [];
-  if (noteFilesInput.files.length > 0) {
-    for (const file of noteFilesInput.files) {
-      const uploaded = await uploadFileToDrive(file);
-      files.push({
-        name: file.name,
-        type: file.type,
-        driveId: uploaded.id,
-        driveUrl: `https://drive.google.com/uc?id=${uploaded.id}`,
-      });
-    }
+  for (let file of noteFiles.files) {
+    let link = await uploadFileToDrive(file);
+    files.push({ name: file.name, url: link, type: file.type });
   }
 
   let existing = notes.find((n) => n.id === id);
@@ -206,91 +206,89 @@ noteForm.addEventListener("submit", async (e) => {
     existing.title = title;
     existing.content = content;
     existing.tags = tags;
-    existing.color = selectedColor || existing.color;
-    if (files.length > 0) {
-      existing.files = (existing.files || []).concat(files);
-    }
+    existing.color = color;
+    existing.files = files;
   } else {
-    notes.push({
-      id,
-      title,
-      content,
-      tags,
-      color: selectedColor || "",
-      files,
-    });
+    notes.push({ id, title, content, tags, color, files });
   }
 
-  saveNotes();
+  await saveBackup();
   renderNotes();
   noteDialog.close();
-  toast("Note saved ✔");
-
-  await autoBackup();
 });
 
-// ================== DELETE NOTE ==================
-deleteNoteBtn.addEventListener("click", handleNoteDelete);
-
-async function handleNoteDelete() {
-  const id = noteIdInput.value;
-  if (!id) return;
-
-  if (!confirm("Are you sure you want to delete this note and all attached files?"))
+function renderNotes() {
+  notesGrid.innerHTML = "";
+  if (notes.length === 0) {
+    emptyState.classList.remove("hidden");
     return;
-
-  const noteToDelete = notes.find((n) => n.id === id);
-
-  notes = notes.filter((n) => n.id !== id);
-  saveNotes();
-  renderNotes();
-  noteDialog.close();
-  toast("Note deleted ✔");
-
-  await autoBackup();
-
-  // Cleanup files
-  if (noteToDelete?.files?.length) {
-    for (const file of noteToDelete.files) {
-      if (file.driveId) {
-        try {
-          await gapi.client.drive.files.delete({
-            fileId: file.driveId,
-          });
-          console.log("Deleted file from Drive:", file.name);
-        } catch (err) {
-          console.warn("Could not delete file:", file.name, err);
-        }
-      }
-    }
+  } else {
+    emptyState.classList.add("hidden");
   }
+
+  notes.forEach((note) => {
+    const card = document.createElement("div");
+    card.className =
+      "rounded-2xl shadow p-4 flex flex-col gap-2 bg-white relative";
+    if (note.color) {
+      card.style.background = note.color;
+    }
+
+    let tagHtml = note.tags
+      .map(
+        (t) =>
+          `<span class="px-2 py-1 text-xs rounded bg-slate-200 text-slate-700">#${t}</span>`
+      )
+      .join(" ");
+
+    let fileHtml = note.files
+      ? note.files
+          .map((f) => {
+            if (f.type.startsWith("image/")) {
+              return `<img src="${f.url}" class="w-full rounded-lg">`;
+            } else if (f.type.startsWith("video/")) {
+              return `<video controls class="w-full rounded-lg"><source src="${f.url}" type="${f.type}"></video>`;
+            } else {
+              return `<a href="${f.url}" target="_blank" class="text-sky-600 underline">${f.name}</a>`;
+            }
+          })
+          .join("")
+      : "";
+
+    card.innerHTML = `
+      <button class="absolute top-2 right-2 text-gray-500 hover:text-gray-800 edit-btn">✏️</button>
+      <h2 class="font-bold text-lg">${note.title}</h2>
+      <p>${note.content}</p>
+      <div class="flex gap-2 flex-wrap">${tagHtml}</div>
+      <div class="mt-2">${fileHtml}</div>
+    `;
+
+    card.querySelector(".edit-btn").addEventListener("click", () => {
+      noteIdInput.value = note.id;
+      noteTitle.value = note.title;
+      noteContent.value = note.content;
+      noteTags.value = note.tags.join(", ");
+      noteColor.value = note.color;
+      noteDialog.showModal();
+    });
+
+    notesGrid.appendChild(card);
+  });
+
+  updateTagFilter();
 }
 
-// ================== COLOR SELECTION ==================
-noteColorOptions.forEach((btn) => {
-  btn.addEventListener("click", () => {
-    selectedColor = btn.style.background;
-    noteColorInput.value = selectedColor;
-    noteColorOptions.forEach((b) => b.classList.remove("ring-4", "ring-sky-500"));
-    btn.classList.add("ring-4", "ring-sky-500");
+function updateTagFilter() {
+  let allTags = new Set();
+  notes.forEach((n) => n.tags.forEach((t) => allTags.add(t)));
+  tagFilter.innerHTML = `<option value="">All Tags</option>`;
+  allTags.forEach((t) => {
+    let opt = document.createElement("option");
+    opt.value = t;
+    opt.textContent = t;
+    tagFilter.appendChild(opt);
   });
-});
+}
 
-// ================== EVENTS ==================
-fab.addEventListener("click", openNewNoteDialog);
-closeNoteBtn.addEventListener("click", () => noteDialog.close());
 searchInput.addEventListener("input", renderNotes);
 tagFilter.addEventListener("change", renderNotes);
-
-logoutBtn.addEventListener("click", () => {
-  if (confirm("Do you really want to logout?")) {
-    google.accounts.id.disableAutoSelect();
-    localStorage.clear();
-    location.reload();
-  }
-});
-
-// ================== INIT ==================
-window.onload = () => {
-  renderNotes();
-};
