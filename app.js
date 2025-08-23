@@ -33,17 +33,20 @@ function renderNotes() {
     const matchesTag = !selectedTag || (n.tags && n.tags.includes(selectedTag));
     return matchesSearch && matchesTag;
   });
-  if(filtered.length===0){emptyState.classList.remove("hidden");} else{emptyState.classList.add("hidden");}
+  emptyState.classList.toggle("hidden", filtered.length !== 0);
+
   filtered.forEach(note => {
     const div = document.createElement("div");
     div.className = "note-card";
     div.draggable = true;
-    div.style.background = note.color;
-    div.innerHTML = `<h3 class="text-lg font-bold">${note.title}</h3>
-                     <p class="mt-2 text-sm">${note.content}</p>
-                     <div class="mt-3 flex flex-wrap gap-1">${note.tags?.map(t=>`<span class="tag-chip">${t}</span>`).join('')||''}</div>`;
+    div.style.background = note.color || "linear-gradient(135deg, #fef08a, #fbbf24)";
+    div.innerHTML = `
+      <h3 class="text-lg font-bold">${note.title}</h3>
+      <p class="mt-2 text-sm break-words">${note.content}</p>
+      <div class="mt-3 flex flex-wrap gap-1">${note.tags?.map(t=>`<span class="tag-chip">${t}</span>`).join('')||''}</div>
+    `;
     div.addEventListener("click",()=>openNote(note.id));
-    div.addEventListener("dragstart",e=>{e.dataTransfer.setData("text/plain",note.id); div.classList.add("dragging");});
+    div.addEventListener("dragstart",e=>{ e.dataTransfer.setData("text/plain",note.id); div.classList.add("dragging"); });
     div.addEventListener("dragend",()=>div.classList.remove("dragging"));
     notesGrid.appendChild(div);
   });
@@ -83,7 +86,7 @@ newNoteBtn.addEventListener("click",()=>{
 // ===== Save Note =====
 noteForm.addEventListener("submit",e=>{
   e.preventDefault();
-  let id = noteIdInput.value;
+  const id = noteIdInput.value;
   const tags = noteTags.value.split(",").map(t=>t.trim()).filter(t=>t);
   if(id){
     const note = notes.find(n=>n.id===id);
@@ -128,35 +131,54 @@ window.addEventListener('beforeinstallprompt', (e)=>{
 installBtn.addEventListener("click", async ()=>{
   if(!deferredPrompt) return;
   deferredPrompt.prompt();
-  const choice = await deferredPrompt.userChoice;
+  await deferredPrompt.userChoice;
   installBtn.classList.add("hidden");
   deferredPrompt = null;
 });
 
 // ===== Google Drive Backup =====
-async function getOrCreateFolder(name){
-  const res = await gapi.client.drive.files.list({q:`name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false`});
+async function getOrCreateFolder(name="HexaNotesBackup"){
+  const res = await gapi.client.drive.files.list({
+    q:`name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+    fields: "files(id,name)"
+  });
   if(res.result.files.length>0) return res.result.files[0].id;
-  const folder = await gapi.client.drive.files.create({resource:{name, mimeType:'application/vnd.google-apps.folder'}, fields:'id'});
+  const folder = await gapi.client.drive.files.create({
+    resource:{name, mimeType:'application/vnd.google-apps.folder'},
+    fields:'id'
+  });
   return folder.result.id;
 }
 
 async function backupNotes(){
   if(!accessToken) return alert("Login required");
   gapi.client.setToken({access_token:accessToken});
-  const folderId = await getOrCreateFolder("HexaNotesBackup");
-  const content = new Blob([JSON.stringify(notes)], {type:'application/json'});
-  const metadata = {name:'hexa-notes.json', parents:[folderId], mimeType:'application/json'};
-  const search = await gapi.client.drive.files.list({q:`name='hexa-notes.json' and '${folderId}' in parents and trashed=false`});
-  let fileId;
-  if(search.result.files.length>0){fileId = search.result.files[0].id;}
-  const form = new FormData();
-  form.append('metadata', new Blob([JSON.stringify(metadata)], {type:'application/json'}));
-  form.append('file', content);
-  if(fileId){
-    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`, {method:'PATCH', headers:{Authorization:`Bearer ${accessToken}`}, body:form});
+  const folderId = await getOrCreateFolder();
+  const fileName = 'hexa-notes.json';
+  const search = await gapi.client.drive.files.list({
+    q:`name='${fileName}' and '${folderId}' in parents and trashed=false`,
+    fields: 'files(id,name)'
+  });
+  const fileContent = JSON.stringify(notes);
+  const blob = new Blob([fileContent], {type:'application/json'});
+  if(search.result.files.length > 0){
+    const fileId = search.result.files[0].id;
+    await gapi.client.request({
+      path:`/upload/drive/v3/files/${fileId}`,
+      method:'PATCH',
+      params:{uploadType:'media'},
+      body: blob
+    });
   } else {
-    await fetch(`https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart`, {method:'POST', headers:{Authorization:`Bearer ${accessToken}`}, body:form});
+    const metadata = {name:fileName, parents:[folderId]};
+    const formData = new FormData();
+    formData.append('metadata', new Blob([JSON.stringify(metadata)], {type:'application/json'}));
+    formData.append('file', blob);
+    await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id", {
+      method:'POST',
+      headers:{Authorization:`Bearer ${accessToken}`},
+      body:formData
+    });
   }
   alert("Backup complete!");
 }
@@ -164,8 +186,11 @@ async function backupNotes(){
 async function restoreNotes(){
   if(!accessToken) return alert("Login required");
   gapi.client.setToken({access_token:accessToken});
-  const folderId = await getOrCreateFolder("HexaNotesBackup");
-  const search = await gapi.client.drive.files.list({q:`name='hexa-notes.json' and '${folderId}' in parents and trashed=false`});
+  const folderId = await getOrCreateFolder();
+  const search = await gapi.client.drive.files.list({
+    q:`name='hexa-notes.json' and '${folderId}' in parents and trashed=false`,
+    fields: 'files(id,name)'
+  });
   if(search.result.files.length===0) return alert("No backup found");
   const fileId = search.result.files[0].id;
   const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {headers:{Authorization:`Bearer ${accessToken}`}});
@@ -181,9 +206,9 @@ restoreBtn.addEventListener("click", restoreNotes);
 
 // ===== Initialize =====
 function init(){
-  if(!accessToken) {window.location.href="index.html"; return;}
+  if(!accessToken){ window.location.href="index.html"; return; }
   loadNotes();
   renderNotes();
-  if('serviceWorker' in navigator){navigator.serviceWorker.register('service-worker.js');}
+  if('serviceWorker' in navigator){ navigator.serviceWorker.register('service-worker.js'); }
 }
 window.onload = init;
