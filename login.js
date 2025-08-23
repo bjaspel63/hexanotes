@@ -20,6 +20,14 @@ function initializeTokenClient() {
   });
 }
 
+async function getUserEmail(access_token) {
+  const res = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+    headers: { Authorization: `Bearer ${access_token}` }
+  });
+  const data = await res.json();
+  return data.email;
+}
+
 async function handleTokenResponse(resp) {
   if (resp.error) {
     console.error(resp);
@@ -27,14 +35,14 @@ async function handleTokenResponse(resp) {
     return;
   }
 
+  const email = await getUserEmail(resp.access_token);
+  if (!email) {
+    alert("Failed to get user email");
+    return;
+  }
+
   localStorage.setItem("accessToken", resp.access_token);
-
-  // Fetch user info
-  const userInfo = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-    headers: { Authorization: `Bearer ${resp.access_token}` }
-  }).then(r => r.json());
-
-  localStorage.setItem("userId", userInfo.email); // store email as userId
+  localStorage.setItem("userEmail", email); // store email for IndexedDB separation
   window.location.href = "main.html";
 }
 
@@ -49,8 +57,8 @@ function renderLoginButton() {
     initializeTokenClient();
 
     const storedToken = localStorage.getItem("accessToken");
-    const storedUserId = localStorage.getItem("userId");
-    if (storedToken && storedUserId) {
+    if (storedToken) {
+      // Validate token if needed
       gapi.client.setToken({ access_token: storedToken });
       window.location.href = "main.html";
     } else {
