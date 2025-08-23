@@ -27,9 +27,7 @@ const fab = document.createElement("button");
 fab.innerHTML = "+";
 fab.className = "fixed bottom-6 right-6 w-16 h-16 rounded-full bg-sky-600 text-white text-3xl shadow-lg flex items-center justify-center hover:bg-sky-700 transition";
 document.body.appendChild(fab);
-fab.addEventListener("click", () => {
-    openNewNoteDialog();
-});
+fab.addEventListener("click", () => openNewNoteDialog());
 
 // ===== Sync Indicator =====
 const syncIndicator = document.createElement("div");
@@ -229,7 +227,7 @@ function renderNotes() {
 
     filtered.forEach(note => {
         const div = document.createElement("div");
-        div.className = "note-card";
+        div.className = "note-card pop-in";
         div.draggable = true;
         div.style.background = note.color || "linear-gradient(135deg, #fef08a, #fbbf24)";
         div.innerHTML = `
@@ -239,6 +237,8 @@ function renderNotes() {
         `;
         div.addEventListener("click", () => openNote(note.id));
         notesGrid.appendChild(div);
+
+        div.addEventListener("animationend", () => div.classList.remove("pop-in"));
     });
 
     renderTagFilter();
@@ -276,10 +276,7 @@ function openNewNoteDialog() {
 noteForm.addEventListener("submit", e => {
     e.preventDefault();
     const title = noteTitle.value.trim();
-    if (!title) {
-        toast("Title cannot be empty ❌");
-        return;
-    }
+    if (!title) { toast("Title cannot be empty ❌"); return; }
 
     const id = noteIdInput.value;
     const tags = noteTags.value.split(",").map(t => t.trim()).filter(t => t);
