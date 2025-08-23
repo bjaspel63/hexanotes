@@ -15,18 +15,26 @@ async function initializeGapi() {
 function initializeTokenClient() {
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: CLIENT_ID,
-    scope: 'https://www.googleapis.com/auth/drive.file',
+    scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email',
     callback: handleTokenResponse
   });
 }
 
-function handleTokenResponse(resp) {
+async function handleTokenResponse(resp) {
   if (resp.error) {
     console.error(resp);
     alert("Login failed. Try again.");
     return;
   }
+
   localStorage.setItem("accessToken", resp.access_token);
+
+  // Fetch user info
+  const userInfo = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+    headers: { Authorization: `Bearer ${resp.access_token}` }
+  }).then(r => r.json());
+
+  localStorage.setItem("userId", userInfo.email); // store email as userId
   window.location.href = "main.html";
 }
 
@@ -41,8 +49,8 @@ function renderLoginButton() {
     initializeTokenClient();
 
     const storedToken = localStorage.getItem("accessToken");
-    if (storedToken) {
-      // Optionally validate token with a small API call
+    const storedUserId = localStorage.getItem("userId");
+    if (storedToken && storedUserId) {
       gapi.client.setToken({ access_token: storedToken });
       window.location.href = "main.html";
     } else {
