@@ -73,6 +73,32 @@ async function findFileInFolder(folderId, fileName) {
     return res.result.files?.[0] || null;
 }
 
+// ===== Restore Notes =====
+async function restoreNotes() {
+    try {
+        const ready = await ensureGapiAndToken();
+        if (!ready) return;
+
+        const folderId = await getOrCreateFolderByName(DRIVE_PRIMARY_FOLDER);
+        const file = await findFileInFolder(folderId, DRIVE_PRIMARY_FILE);
+        if (!file) return;
+
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
+            headers: { Authorization: `Bearer ${accessToken}` }
+        });
+        let data = await res.json();
+
+        // If data is an object (malformed), convert to empty array
+        if (!Array.isArray(data)) data = [];
+
+        notes = data;
+        saveNotesLocal();
+        renderNotes();
+    } catch (err) { 
+        console.warn("Restore failed", err); 
+    }
+}
+
 // ===== Auto Backup =====
 const autoBackup = debounce(async () => {
     if (!notes.length) return;
@@ -83,7 +109,9 @@ const autoBackup = debounce(async () => {
 
         const folderId = await getOrCreateFolderByName(DRIVE_PRIMARY_FOLDER);
         let file = await findFileInFolder(folderId, DRIVE_PRIMARY_FILE);
-        const payload = new Blob([JSON.stringify(notes)], { type: 'application/json' });
+
+        // Ensure notes is always an array
+        const payload = new Blob([JSON.stringify(Array.isArray(notes) ? notes : [])], { type: 'application/json' });
 
         if (file) {
             await gapi.client.request({
@@ -98,48 +126,14 @@ const autoBackup = debounce(async () => {
             formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
             formData.append('file', payload);
             await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id", {
-                method: 'POST', headers: { Authorization: `Bearer ${accessToken}` }, body: formData
+                method: 'POST',
+                headers: { Authorization: `Bearer ${accessToken}` },
+                body: formData
             });
         }
     } catch (err) { console.warn("Backup failed", err); }
     finally { hideSyncing(); }
 }, 1500);
-
-// ===== Restore Notes =====
-async function restoreNotes() {
-    try {
-        const ready = await ensureGapiAndToken();
-        if (!ready) return;
-
-        const folderId = await getOrCreateFolderByName(DRIVE_PRIMARY_FOLDER);
-        const file = await findFileInFolder(folderId, DRIVE_PRIMARY_FILE);
-
-        if (!file) {
-            // create empty notes.json if missing
-            const payload = new Blob([JSON.stringify([])], { type: 'application/json' });
-            const metadata = { name: DRIVE_PRIMARY_FILE, parents: [folderId] };
-            const formData = new FormData();
-            formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-            formData.append('file', payload);
-            await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id", {
-                method: 'POST', headers: { Authorization: `Bearer ${accessToken}` }, body: formData
-            });
-            notes = [];
-            saveNotesLocal();
-            renderNotes();
-            return;
-        }
-
-        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
-            headers: { Authorization: `Bearer ${accessToken}` }
-        });
-        const data = await res.json();
-        if (!Array.isArray(data)) return;
-        notes = data;
-        saveNotesLocal();
-        renderNotes();
-    } catch (err) { console.warn("Restore failed", err); }
-}
 
 // ===== Render Notes =====
 function renderNotes() {
