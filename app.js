@@ -27,7 +27,6 @@ function toast(msg, duration = 2000) {
         setTimeout(() => t.remove(), 500);
     }, duration);
 }
-
 function showSyncing() { syncIndicator.style.display = "block"; }
 function hideSyncing() { syncIndicator.style.display = "none"; }
 function debounce(fn, delay = 1500) {
@@ -73,23 +72,36 @@ async function findFileInFolder(folderId, fileName) {
     return res.result.files?.[0] || null;
 }
 
-// ===== Restore Notes =====
+// ===== Restore Notes with Auto-Recovery =====
 async function restoreNotes() {
     try {
         const ready = await ensureGapiAndToken();
         if (!ready) return;
 
         const folderId = await getOrCreateFolderByName(DRIVE_PRIMARY_FOLDER);
-        const file = await findFileInFolder(folderId, DRIVE_PRIMARY_FILE);
-        if (!file) return;
+        let file = await findFileInFolder(folderId, DRIVE_PRIMARY_FILE);
+
+        if (!file) {
+            notes = [];
+            await backupNotes(); // create notes.json on Drive if missing
+            return;
+        }
 
         const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
             headers: { Authorization: `Bearer ${accessToken}` }
         });
-        let data = await res.json();
-        if (!Array.isArray(data)) data = [];
 
-        notes = data;
+        try {
+            const data = await res.json();
+            if (!Array.isArray(data)) throw new Error("Invalid JSON structure");
+            notes = data;
+        } catch (err) {
+            console.warn("Drive JSON invalid, auto-recovering...", err);
+            toast("Notes recovered from last known good state ✔");
+            notes = JSON.parse(localStorage.getItem("hexaNotes") || "[]");
+            await backupNotes(); // rewrite proper JSON to Drive
+        }
+
         saveNotesLocal();
         renderNotes();
     } catch (err) { 
@@ -97,8 +109,13 @@ async function restoreNotes() {
     }
 }
 
-// ===== Auto Backup =====
-const autoBackup = debounce(async () => {
+// ===== Backup Notes =====
+const backupNotes = debounce(async () => {
+    if (!Array.isArray(notes)) {
+        console.warn("Notes array invalid, restoring from localStorage");
+        notes = JSON.parse(localStorage.getItem("hexaNotes") || "[]");
+    }
+
     try {
         showSyncing();
         const ready = await ensureGapiAndToken();
@@ -107,8 +124,7 @@ const autoBackup = debounce(async () => {
         const folderId = await getOrCreateFolderByName(DRIVE_PRIMARY_FOLDER);
         let file = await findFileInFolder(folderId, DRIVE_PRIMARY_FILE);
 
-        // Always ensure notes is an array
-        const payload = new Blob([JSON.stringify(Array.isArray(notes) ? notes : [])], { type: 'application/json' });
+        const payload = new Blob([JSON.stringify(notes)], { type: 'application/json' });
 
         if (file) {
             // Update existing file
@@ -120,7 +136,7 @@ const autoBackup = debounce(async () => {
             });
         } else {
             // Create new file
-            const metadata = { name: DRIVE_PRIMARY_FILE, parents: [folderId], mimeType: 'application/json' };
+            const metadata = { name: DRIVE_PRIMARY_FILE, parents: [folderId] };
             const formData = new FormData();
             formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
             formData.append('file', payload);
@@ -133,10 +149,11 @@ const autoBackup = debounce(async () => {
         }
     } catch (err) {
         console.warn("Backup failed", err);
+        toast("Backup failed ❌");
     } finally {
         hideSyncing();
     }
-}, 1500);
+}, 1000);
 
 // ===== Render Notes =====
 function renderNotes() {
@@ -278,13 +295,13 @@ window.onload = async () => {
     noteForm.addEventListener("submit", handleNoteSubmit);
     closeNoteBtn.addEventListener("click", () => noteDialog.close());
     deleteNoteBtn.addEventListener("click", handleNoteDelete);
-    [noteTitle, noteContent, noteTags, noteColor, noteFilesInput].forEach(i => i.addEventListener("input", autoBackup));
+    [noteTitle, noteContent, noteTags, noteColor, noteFilesInput].forEach(i => i.addEventListener("input", backupNotes));
     searchInput.addEventListener("input", renderNotes);
     tagFilter.addEventListener("change", renderNotes);
 
     logoutBtn.addEventListener("click", async () => {
         if (confirm("Are you sure you want to logout?")) {
-            await autoBackup(); // save before logout
+            await backupNotes(); // save before logout
             localStorage.removeItem("accessToken");
             window.location.href = "index.html";
         }
@@ -351,7 +368,7 @@ async function handleNoteSubmit(e) {
     saveNotesLocal();
     renderNotes();
     noteDialog.close();
-    autoBackup();
+    backupNotes();
 }
 
 function handleNoteDelete() {
@@ -362,5 +379,5 @@ function handleNoteDelete() {
     renderNotes();
     noteDialog.close();
     toast("Note deleted ✔");
-    autoBackup();
+    backupNotes();
 }
