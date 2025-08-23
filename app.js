@@ -320,15 +320,75 @@ async function handleNoteSubmit(e) {
     autoBackup();
 }
 
-async function handleNoteDelete() {
-    if (!confirm("Are you sure you want to delete this note?")) return;
-    const id = noteIdInput.value;
-    notes = notes.filter(n => n.id !== id);
-    await deleteNoteFromDB(id);
+async function handleNoteSubmit(e) {
+    e.preventDefault();
+    const title = noteTitle.value.trim();
+    if (!title) { toast("Title cannot be empty ❌"); return; }
+
+    const id = noteIdInput.value || Date.now().toString();
+    const tags = noteTags.value.split(",").map(t => t.trim()).filter(t => t);
+    const colorValue = noteColor.value || COLOR_OPTIONS[0].value;
+
+    // Construct the note object fully first
+    let newNote = {
+        id,
+        title,
+        content: noteContent.value.trim(),
+        tags,
+        color: colorValue,
+        files: []
+    };
+
+    // Handle file uploads
+    if (noteFilesInput.files.length > 0) {
+        try {
+            const ready = await ensureGapiAndToken();
+            if (!ready) return;
+
+            const folderId = await getOrCreateFolderByName(DRIVE_PRIMARY_FOLDER);
+
+            for (const f of noteFilesInput.files) {
+                const metadata = { name: f.name, parents: [folderId] };
+                const formData = new FormData();
+                formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+                formData.append('file', f);
+
+                const res = await fetch(
+                    "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink",
+                    {
+                        method: 'POST',
+                        headers: { Authorization: `Bearer ${accessToken}` },
+                        body: formData
+                    }
+                );
+                const data = await res.json();
+                newNote.files.push({ name: f.name, type: f.type, url: data.webViewLink });
+            }
+        } catch (err) {
+            console.error("File upload failed", err);
+            toast("File upload failed ❌");
+        }
+    }
+
+    // Check if updating existing note
+    const existingIndex = notes.findIndex(n => n.id === id);
+    if (existingIndex > -1) {
+        notes[existingIndex] = { 
+            ...notes[existingIndex], 
+            ...newNote, 
+            files: [...(notes[existingIndex].files || []), ...newNote.files] 
+        };
+        await saveNoteToDB(notes[existingIndex]);
+        toast("Note updated ✔");
+    } else {
+        notes.push(newNote);
+        await saveNoteToDB(newNote);
+        toast("Note added ✔");
+    }
+
     renderNotes();
     noteDialog.close();
-    toast("Note deleted ✔");
-    autoBackup();
+    backupToDrive();
 }
 
 // ======== File Upload Auto-backup ========
