@@ -222,6 +222,7 @@ function openNote(id) {
     noteContent.value = note.content || "";
     noteTags.value = note.tags?.join(", ") || "";
     noteColor.value = note.color || COLOR_OPTIONS[0].value;
+    noteFilesInput.value = "";
     deleteNoteBtn.style.display = "inline-block";
     noteDialog.showModal();
 }
@@ -239,7 +240,6 @@ function openNewNoteDialog() {
 
 // ===== Initialize DOM-dependent elements =====
 window.onload = async () => {
-    // Grab DOM elements
     notesGrid = document.getElementById("notesGrid");
     noteDialog = document.getElementById("noteDialog");
     noteForm = document.getElementById("noteForm");
@@ -257,14 +257,12 @@ window.onload = async () => {
     emptyState = document.getElementById("emptyState");
     closeNoteBtn = document.getElementById("closeNoteBtn");
 
-    // Floating FAB
     fab = document.createElement("button");
     fab.innerHTML = "+";
     fab.className = "fixed bottom-6 right-6 w-16 h-16 rounded-full bg-sky-600 text-white text-3xl shadow-lg flex items-center justify-center hover:bg-sky-700 transition";
     document.body.appendChild(fab);
     fab.addEventListener("click", openNewNoteDialog);
 
-    // Sync indicator
     syncIndicator = document.createElement("div");
     syncIndicator.id = "syncIndicator";
     syncIndicator.textContent = "Syncing...";
@@ -281,21 +279,20 @@ window.onload = async () => {
     });
     document.body.appendChild(syncIndicator);
 
-    // Color buttons
+    // Correct color selection
     document.querySelectorAll(".color-btn").forEach(btn => {
         btn.addEventListener("click", () => {
-            const selectedColor = COLOR_OPTIONS.find(c => c.name.toLowerCase() === btn.dataset.color.toLowerCase());
-            if (selectedColor) noteColor.value = selectedColor.value;
+            noteColor.value = btn.dataset.color;
         });
     });
 
-    // Event listeners
     noteForm.addEventListener("submit", handleNoteSubmit);
     closeNoteBtn?.addEventListener("click", () => noteDialog.close());
     deleteNoteBtn.addEventListener("click", handleNoteDelete);
     [noteTitle, noteContent, noteTags, noteColor, noteFilesInput].forEach(input => input.addEventListener("input", autoBackup));
     searchInput.addEventListener("input", renderNotes);
     tagFilter.addEventListener("change", renderNotes);
+
     logoutBtn.addEventListener("click", () => {
         if (confirm("Are you sure you want to logout?")) {
             localStorage.removeItem("accessToken");
@@ -303,7 +300,6 @@ window.onload = async () => {
         }
     });
 
-    // PWA install
     let deferredPrompt;
     window.addEventListener('beforeinstallprompt', e => {
         e.preventDefault();
@@ -318,11 +314,9 @@ window.onload = async () => {
         deferredPrompt = null;
     });
 
-    // Load & render
     loadNotes();
     renderNotes();
 
-    // Service worker
     if ('serviceWorker' in navigator) {
         try { await navigator.serviceWorker.register('service-worker.js'); }
         catch (e) { console.warn("SW registration failed", e); }
