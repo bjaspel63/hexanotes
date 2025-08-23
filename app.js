@@ -11,13 +11,14 @@ const COLOR_OPTIONS = [
 
 let notes = [];
 let accessToken = null;
-let userId = null;
+let db = null;
+let dbName = null;
 
 let notesGrid, noteDialog, noteForm, noteIdInput, noteTitle, noteContent, noteTags, noteColor, noteFilesInput, existingFilesDiv;
 let searchInput, tagFilter, deleteNoteBtn, logoutBtn, installBtn, emptyState, closeNoteBtn;
 let fab, syncIndicator;
 
-// ===== Helpers =====
+// ======== Helpers ========
 function toast(msg, duration = 2000) {
     const t = document.createElement("div");
     t.textContent = msg;
@@ -28,6 +29,7 @@ function toast(msg, duration = 2000) {
         setTimeout(() => t.remove(), 500);
     }, duration);
 }
+
 function showSyncing() { syncIndicator.style.display = "block"; }
 function hideSyncing() { syncIndicator.style.display = "none"; }
 function debounce(fn, delay = 1500) {
@@ -38,28 +40,65 @@ function debounce(fn, delay = 1500) {
     };
 }
 
-// ===== Local Storage =====
-function saveNotesLocal() { 
-    if (!userId) return;
-    localStorage.setItem(`hexaNotes_${userId}`, JSON.stringify(notes)); 
-}
-function loadNotesLocal() { 
-    if (!userId) return notes = [];
-    notes = JSON.parse(localStorage.getItem(`hexaNotes_${userId}`) || "[]"); 
+// ======== IndexedDB ========
+async function initDB() {
+    const userEmail = localStorage.getItem("userEmail");
+    if (!userEmail) return alert("User not logged in!");
+
+    dbName = `hexaNotes-${userEmail}`;
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(dbName, 1);
+        request.onupgradeneeded = event => {
+            db = event.target.result;
+            db.createObjectStore("notes", { keyPath: "id" });
+        };
+        request.onsuccess = event => {
+            db = event.target.result;
+            resolve();
+        };
+        request.onerror = event => reject(event);
+    });
 }
 
-// ===== GAPI =====
+async function saveNoteToDB(note) {
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction("notes", "readwrite");
+        tx.objectStore("notes").put(note);
+        tx.oncomplete = () => resolve();
+        tx.onerror = e => reject(e);
+    });
+}
+
+async function deleteNoteFromDB(id) {
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction("notes", "readwrite");
+        tx.objectStore("notes").delete(id);
+        tx.oncomplete = () => resolve();
+        tx.onerror = e => reject(e);
+    });
+}
+
+async function loadNotesFromDB() {
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction("notes", "readonly");
+        const store = tx.objectStore("notes");
+        const request = store.getAll();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = e => reject(e);
+    });
+}
+
+// ======== GAPI ========
 async function ensureGapiAndToken() {
     await new Promise(res => gapi.load('client', res));
     await gapi.client.init({ discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"] });
     accessToken = localStorage.getItem("accessToken");
-    userId = localStorage.getItem("userId"); // store user id/email for account-specific storage
-    if (!accessToken || !userId) { window.location.href = "index.html"; return false; }
+    if (!accessToken) { window.location.href = "index.html"; return false; }
     gapi.client.setToken({ access_token: accessToken });
     return true;
 }
 
-// ===== Drive Helpers =====
+// ======== Drive Backup ========
 async function getOrCreateFolderByName(name) {
     const res = await gapi.client.drive.files.list({
         q: `name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
@@ -80,58 +119,16 @@ async function findFileInFolder(folderId, fileName) {
     return res.result.files?.[0] || null;
 }
 
-// ===== Restore Notes with Auto-Recovery =====
-async function restoreNotes() {
-    try {
-        const ready = await ensureGapiAndToken();
-        if (!ready) return;
-
-        const folderId = await getOrCreateFolderByName(`${DRIVE_PRIMARY_FOLDER}_${userId}`); // user-specific folder
-        let file = await findFileInFolder(folderId, DRIVE_PRIMARY_FILE);
-
-        if (!file) {
-            notes = [];
-            await backupNotes(); // create notes.json on Drive if missing
-            return;
-        }
-
-        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
-            headers: { Authorization: `Bearer ${accessToken}` }
-        });
-
-        let data;
-        try {
-            data = await res.json();
-            if (!Array.isArray(data)) throw new Error("Invalid JSON structure");
-        } catch (err) {
-            console.warn("Drive JSON invalid or corrupted, auto-recovering...", err);
-            toast("Notes file was invalid. Recovering from localStorage ✔");
-            data = JSON.parse(localStorage.getItem(`hexaNotes_${userId}`) || "[]");
-            notes = data;
-            await backupNotes();
-        }
-
-        notes = data;
-        saveNotesLocal();
-        renderNotes();
-    } catch (err) { 
-        console.error("Restore failed", err); 
-    }
-}
-
-// ===== Backup Notes =====
-async function backupNotes() {
-    if (!userId) return;
+async function backupToDrive() {
     try {
         showSyncing();
         const ready = await ensureGapiAndToken();
         if (!ready) return;
 
-        const folderId = await getOrCreateFolderByName(`${DRIVE_PRIMARY_FOLDER}_${userId}`);
+        const folderId = await getOrCreateFolderByName(DRIVE_PRIMARY_FOLDER);
         let file = await findFileInFolder(folderId, DRIVE_PRIMARY_FILE);
 
-        const cleanNotes = Array.isArray(notes) ? notes : [];
-        const payload = new Blob([JSON.stringify(cleanNotes, null, 2)], { type: 'application/json' });
+        const payload = new Blob([JSON.stringify(notes, null, 2)], { type: 'application/json' });
 
         if (file) {
             await gapi.client.request({
@@ -152,16 +149,16 @@ async function backupNotes() {
                 body: formData
             });
         }
-        toast("Notes synced to Drive ✔");
+        toast("Backup to Drive complete ✔");
     } catch (err) {
-        console.error("Backup failed", err);
-        toast("Sync failed ❌");
+        console.error("Drive backup failed", err);
+        toast("Backup failed ❌");
     } finally {
         hideSyncing();
     }
 }
 
-// ===== Render Notes =====
+// ======== Render Notes ========
 function renderNotes() {
     notesGrid.innerHTML = "";
     const search = (searchInput.value || "").toLowerCase();
@@ -219,13 +216,13 @@ function renderNotes() {
     renderTagFilter();
 }
 
-// ===== Tag Filter =====
+// ======== Tag Filter ========
 function renderTagFilter() {
     const tags = [...new Set(notes.flatMap(n => n.tags || []))];
     tagFilter.innerHTML = '<option value="">All Tags</option>' + tags.map(t => `<option value="${t}">${t}</option>`).join('');
 }
 
-// ===== Note Dialog =====
+// ======== Note Dialogs ========
 function openNoteDialog(id) {
     const note = notes.find(n => n.id === id);
     if (!note) return;
@@ -260,7 +257,78 @@ function openNewNoteDialog() {
     noteDialog.showModal();
 }
 
-// ===== DOM Initialization =====
+// ======== Handle Notes ========
+async function handleNoteSubmit(e) {
+    e.preventDefault();
+    const title = noteTitle.value.trim();
+    if (!title) { toast("Title cannot be empty ❌"); return; }
+
+    const id = noteIdInput.value;
+    const tags = noteTags.value.split(",").map(t => t.trim()).filter(t => t);
+    const colorValue = noteColor.value || COLOR_OPTIONS[0].value;
+
+    let filesArray = [];
+
+    if (noteFilesInput.files.length > 0) {
+        try {
+            const ready = await ensureGapiAndToken();
+            if (!ready) return;
+
+            const folderId = await getOrCreateFolderByName(DRIVE_PRIMARY_FOLDER);
+
+            for (const f of noteFilesInput.files) {
+                const metadata = { name: f.name, parents: [folderId] };
+                const formData = new FormData();
+                formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+                formData.append('file', f);
+
+                const res = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink", {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${accessToken}` },
+                    body: formData
+                });
+                const data = await res.json();
+                filesArray.push({ name: f.name, type: f.type, url: data.webViewLink });
+            }
+        } catch (err) {
+            console.error("File upload failed", err);
+            toast("File upload failed ❌");
+        }
+    }
+
+    if (id) {
+        const note = notes.find(n => n.id === id);
+        note.title = title;
+        note.content = noteContent.value.trim();
+        note.tags = tags;
+        note.color = colorValue;
+        note.files = [...(note.files || []), ...filesArray];
+        await saveNoteToDB(note);
+        toast("Note updated ✔");
+    } else {
+        const newNote = { id: Date.now().toString(), title, content: noteContent.value.trim(), tags, color: colorValue, files: filesArray };
+        notes.push(newNote);
+        await saveNoteToDB(newNote);
+        toast("Note added ✔");
+    }
+
+    renderNotes();
+    noteDialog.close();
+    backupToDrive();
+}
+
+async function handleNoteDelete() {
+    if (!confirm("Are you sure you want to delete this note?")) return;
+    const id = noteIdInput.value;
+    notes = notes.filter(n => n.id !== id);
+    await deleteNoteFromDB(id);
+    renderNotes();
+    noteDialog.close();
+    toast("Note deleted ✔");
+    backupToDrive();
+}
+
+// ======== DOM Initialization ========
 window.onload = async () => {
     notesGrid = document.getElementById("notesGrid");
     noteDialog = document.getElementById("noteDialog");
@@ -301,91 +369,19 @@ window.onload = async () => {
     noteForm.addEventListener("submit", handleNoteSubmit);
     closeNoteBtn.addEventListener("click", () => noteDialog.close());
     deleteNoteBtn.addEventListener("click", handleNoteDelete);
-    [noteTitle, noteContent, noteTags, noteColor, noteFilesInput].forEach(i => i.addEventListener("input", backupNotes));
     searchInput.addEventListener("input", renderNotes);
     tagFilter.addEventListener("change", renderNotes);
 
     logoutBtn.addEventListener("click", async () => {
         if (confirm("Are you sure you want to logout?")) {
-            await backupNotes();
             localStorage.removeItem("accessToken");
-            localStorage.removeItem("userId");
+            localStorage.removeItem("userEmail");
             window.location.href = "index.html";
         }
     });
 
-    await ensureGapiAndToken();
-    loadNotesLocal();
+    // Initialize DB & load notes
+    await initDB();
+    notes = await loadNotesFromDB();
     renderNotes();
-    await restoreNotes();
 };
-
-// ===== Handle Notes =====
-async function handleNoteSubmit(e) {
-    e.preventDefault();
-    const title = noteTitle.value.trim();
-    if (!title) { toast("Title cannot be empty ❌"); return; }
-
-    const id = noteIdInput.value;
-    const tags = noteTags.value.split(",").map(t => t.trim()).filter(t => t);
-    const colorValue = noteColor.value || COLOR_OPTIONS[0].value;
-
-    let filesArray = [];
-
-    if (noteFilesInput.files.length > 0) {
-        try {
-            const ready = await ensureGapiAndToken();
-            if (!ready) return;
-
-            const folderId = await getOrCreateFolderByName(`${DRIVE_PRIMARY_FOLDER}_${userId}`);
-
-            for (const f of noteFilesInput.files) {
-                const metadata = { name: f.name, parents: [folderId] };
-                const formData = new FormData();
-                formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-                formData.append('file', f);
-
-                const res = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink", {
-                    method: 'POST',
-                    headers: { Authorization: `Bearer ${accessToken}` },
-                    body: formData
-                });
-                const data = await res.json();
-                filesArray.push({ name: f.name, type: f.type, url: data.webViewLink });
-            }
-        } catch (err) {
-            console.error("File upload failed", err);
-            toast("File upload failed ❌");
-        }
-    }
-
-    if (id) {
-        const note = notes.find(n => n.id === id);
-        if (!note) return;
-        note.title = title;
-        note.content = noteContent.value.trim();
-        note.tags = tags;
-        note.color = colorValue;
-        note.files = [...(note.files || []), ...filesArray];
-        toast("Note updated ✔");
-    } else {
-        notes.push({ id: Date.now().toString(), title, content: noteContent.value.trim(), tags, color: colorValue, files: filesArray });
-        toast("Note added ✔");
-    }
-
-    saveNotesLocal();
-    renderNotes();
-    noteDialog.close();
-    backupNotes();
-}
-
-function handleNoteDelete() {
-    if (!confirm("Are you sure you want to delete this note?")) return;
-    const id = noteIdInput.value;
-    notes = notes.filter(n => n.id !== id);
-    saveNotesLocal();
-    renderNotes();
-    noteDialog.close();
-    toast("Note deleted ✔");
-    backupNotes();
-}
