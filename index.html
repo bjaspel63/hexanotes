@@ -2,64 +2,21 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>HexaNotes</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HexaNotes Login</title>
+<script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="style.css">
-
-<!-- Supabase JS -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.35.0/dist/supabase.min.js"></script>
-
-<!-- Firebase SDK -->
-<script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-auth-compat.js"></script>
-
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://apis.google.com/js/api.js" async defer></script>
 </head>
-<body>
+<body class="bg-gradient-to-br from-sky-50 via-sky-100 to-sky-50 min-h-screen flex items-center justify-center">
 
-<!-- ========================= -->
-<!-- LOGIN SCREEN -->
-<!-- ========================= -->
-<div id="login-screen">
-  <h1>Welcome to HexaNotes</h1>
-  <button id="login-btn">
-    <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" alt="Google Logo">
-    Sign in with Google
-  </button>
+<div class="bg-white rounded-3xl shadow-2xl p-10 w-[90vw] max-w-md text-center">
+  <h1 class="text-3xl font-extrabold text-sky-700 mb-6">📒 Teacher Notes</h1>
+  <p class="mb-6 text-slate-600">Sign in with your Google account to sync your notes.</p>
+  <div id="authArea" class="flex justify-center"></div>
 </div>
 
-<!-- ========================= -->
-<!-- MAIN APP SCREEN -->
-<!-- Hidden by default -->
-<!-- ========================= -->
-<div id="app-screen" style="display:none;">
-  <header>
-    <h1>HexaNotes</h1>
-    <div>
-      <button id="logout-btn">Logout</button>
-    </div>
-  </header>
-
-  <main>
-    <div class="controls">
-      <input type="text" id="search-input" placeholder="Search notes...">
-      <button id="add-note-btn">Add Note</button>
-    </div>
-    <div class="notes-container" id="notes-container"></div>
-  </main>
-
-  <!-- Modal -->
-  <div id="note-modal" class="modal">
-    <div class="modal-content">
-      <span class="close">&times;</span>
-      <h2 id="modal-title">Add Note</h2>
-      <input type="text" id="note-title" placeholder="Title">
-      <textarea id="note-content" placeholder="Content"></textarea>
-      <input type="text" id="note-tags" placeholder="Tags (comma separated)">
-      <button id="save-note-btn">Save Note</button>
-    </div>
-  </div>
-</div>
-
-<script src="script.js"></script>
+<script src="login.js"></script>
 </body>
 </html>
