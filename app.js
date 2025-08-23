@@ -227,7 +227,7 @@ function renderNotes() {
 
     filtered.forEach(note => {
         const div = document.createElement("div");
-        div.className = "note-card pop-in";
+        div.className = "note-card";
         div.draggable = true;
         div.style.background = note.color || "linear-gradient(135deg, #fef08a, #fbbf24)";
         div.innerHTML = `
@@ -235,14 +235,23 @@ function renderNotes() {
             <p class="mt-2 text-sm break-words">${note.content || ""}</p>
             <div class="mt-3 flex flex-wrap gap-1">${note.tags?.map(t => `<span class="tag-chip">${t}</span>`).join('') || ''}</div>
         `;
+
+        // Add pop-in animation
+        div.style.transform = "scale(0.8)";
+        div.style.opacity = "0";
+        div.style.transition = "all 0.3s ease-out";
+        setTimeout(() => {
+            div.style.transform = "scale(1)";
+            div.style.opacity = "1";
+        }, 10);
+
         div.addEventListener("click", () => openNote(note.id));
         notesGrid.appendChild(div);
-
-        div.addEventListener("animationend", () => div.classList.remove("pop-in"));
     });
 
     renderTagFilter();
 }
+
 
 function renderTagFilter() {
     const tags = [...new Set(notes.flatMap(n => n.tags || []))];
@@ -313,14 +322,35 @@ deleteNoteBtn.addEventListener("click", () => {
     if (!note) return;
 
     if (confirm(`Are you sure you want to delete "${note.title}"? ❌`)) {
-        notes = notes.filter(n => n.id !== id);
-        saveNotes();
-        renderNotes();
-        noteDialog.close();
-        toast("Note deleted ✔");
-        autoBackup();
+        const noteDiv = Array.from(notesGrid.children).find(div => {
+            return div.querySelector("h3")?.textContent === note.title;
+        });
+
+        if (noteDiv) {
+            // Add pop-out animation
+            noteDiv.style.transition = "all 0.3s ease";
+            noteDiv.style.transform = "scale(0.8)";
+            noteDiv.style.opacity = "0";
+            setTimeout(() => {
+                notes = notes.filter(n => n.id !== id);
+                saveNotes();
+                renderNotes();
+                noteDialog.close();
+                toast("Note deleted ✔");
+                autoBackup();
+            }, 300); // Match transition duration
+        } else {
+            // Fallback if note div not found
+            notes = notes.filter(n => n.id !== id);
+            saveNotes();
+            renderNotes();
+            noteDialog.close();
+            toast("Note deleted ✔");
+            autoBackup();
+        }
     }
 });
+
 
 [noteTitle, noteContent, noteTags, noteColor].forEach(input => input.addEventListener("input", autoBackup));
 
