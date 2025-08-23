@@ -16,13 +16,14 @@ const noteTitle = document.getElementById("noteTitle");
 const noteContent = document.getElementById("noteContent");
 const noteTags = document.getElementById("noteTags");
 const noteColor = document.getElementById("noteColor");
-const noteFilesInput = document.getElementById("noteFiles"); // new file input
+const noteFilesInput = document.getElementById("noteFiles"); // File input
 const searchInput = document.getElementById("searchInput");
 const tagFilter = document.getElementById("tagFilter");
 const deleteNoteBtn = document.getElementById("deleteNoteBtn");
 const logoutBtn = document.getElementById("logoutBtn");
 const installBtn = document.getElementById("installBtn");
 const emptyState = document.getElementById("emptyState");
+const closeNoteBtn = document.getElementById("closeNoteBtn"); // Close button
 
 // ===== Floating Add Note Button (FAB) =====
 const fab = document.createElement("button");
@@ -59,6 +60,7 @@ function toast(msg, duration = 2000) {
         setTimeout(() => t.remove(), 500);
     }, duration);
 }
+
 function showSyncing() { syncIndicator.style.display = "block"; }
 function hideSyncing() { syncIndicator.style.display = "none"; }
 function isGapiReady() { return window.gapi && gapi.client && typeof gapi.client.request === "function"; }
@@ -202,9 +204,16 @@ function renderNotes() {
         div.className = "note-card";
         div.draggable = true;
         div.style.background = note.color || "linear-gradient(135deg, #fef08a, #fbbf24)";
+
+        // Convert URLs in content to clickable links
+        const linkedContent = note.content?.replace(
+            /(https?:\/\/[^\s]+)/g,
+            '<a href="$1" target="_blank" class="text-blue-600 underline">$1</a>'
+        ) || "";
+
         div.innerHTML = `
             <h3 class="text-lg font-bold">${note.title || ""}</h3>
-            <p class="mt-2 text-sm break-words">${note.content || ""}</p>
+            <p class="mt-2 text-sm break-words">${linkedContent}</p>
             <div class="mt-3 flex flex-wrap gap-1">${note.tags?.map(t => `<span class="tag-chip">${t}</span>`).join('') || ''}</div>
             <div class="mt-3 note-files">
                 ${note.files?.map(f => {
@@ -222,6 +231,7 @@ function renderNotes() {
     renderTagFilter();
 }
 
+// ===== Tag Filter Rendering =====
 function renderTagFilter() {
     const tags = [...new Set(notes.flatMap(n => n.tags || []))];
     tagFilter.innerHTML = '<option value="">All Tags</option>' + tags.map(t => `<option value="${t}">${t}</option>`).join('');
@@ -295,6 +305,10 @@ noteForm.addEventListener("submit", async e => {
     autoBackup();
 });
 
+// Close note dialog button
+closeNoteBtn?.addEventListener("click", () => noteDialog.close());
+
+// Delete note
 deleteNoteBtn.addEventListener("click", () => {
     const id = noteIdInput.value;
     notes = notes.filter(n => n.id !== id);
@@ -305,14 +319,18 @@ deleteNoteBtn.addEventListener("click", () => {
     autoBackup();
 });
 
+// Inputs for autoBackup
 [noteTitle, noteContent, noteTags, noteColor, noteFilesInput].forEach(input => input.addEventListener("input", autoBackup));
 
 searchInput.addEventListener("input", renderNotes);
 tagFilter.addEventListener("change", renderNotes);
 
+// Logout with confirmation
 logoutBtn.addEventListener("click", () => {
-    localStorage.removeItem("accessToken");
-    window.location.href = "index.html";
+    if (confirm("Are you sure you want to logout?")) {
+        localStorage.removeItem("accessToken");
+        window.location.href = "index.html";
+    }
 });
 
 // ===== PWA Install =====
