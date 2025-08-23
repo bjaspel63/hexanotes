@@ -17,46 +17,9 @@ const COLOR_OPTIONS = [
 let notes = [];
 let accessToken = null;
 
-const notesGrid = document.getElementById("notesGrid");
-const noteDialog = document.getElementById("noteDialog");
-const noteForm = document.getElementById("noteForm");
-const noteIdInput = document.getElementById("noteId");
-const noteTitle = document.getElementById("noteTitle");
-const noteContent = document.getElementById("noteContent");
-const noteTags = document.getElementById("noteTags");
-const noteColor = document.getElementById("noteColor");
-const noteFilesInput = document.getElementById("noteFiles");
-const searchInput = document.getElementById("searchInput");
-const tagFilter = document.getElementById("tagFilter");
-const deleteNoteBtn = document.getElementById("deleteNoteBtn");
-const logoutBtn = document.getElementById("logoutBtn");
-const installBtn = document.getElementById("installBtn");
-const emptyState = document.getElementById("emptyState");
-const closeNoteBtn = document.getElementById("closeNoteBtn");
-
-// ===== Floating Add Note Button (FAB) =====
-const fab = document.createElement("button");
-fab.innerHTML = "+";
-fab.className = "fixed bottom-6 right-6 w-16 h-16 rounded-full bg-sky-600 text-white text-3xl shadow-lg flex items-center justify-center hover:bg-sky-700 transition";
-document.body.appendChild(fab);
-fab.addEventListener("click", () => openNewNoteDialog());
-
-// ===== Sync Indicator =====
-const syncIndicator = document.createElement("div");
-syncIndicator.id = "syncIndicator";
-syncIndicator.textContent = "Syncing...";
-Object.assign(syncIndicator.style, {
-    position: "fixed",
-    bottom: "20px",
-    right: "20px",
-    background: "rgba(0,0,0,0.7)",
-    color: "white",
-    padding: "10px 15px",
-    borderRadius: "8px",
-    fontSize: "14px",
-    display: "none"
-});
-document.body.appendChild(syncIndicator);
+let notesGrid, noteDialog, noteForm, noteIdInput, noteTitle, noteContent, noteTags, noteColor, noteFilesInput;
+let searchInput, tagFilter, deleteNoteBtn, logoutBtn, installBtn, emptyState, closeNoteBtn;
+let fab, syncIndicator;
 
 // ===== Helpers =====
 function toast(msg, duration = 2000) {
@@ -274,8 +237,102 @@ function openNewNoteDialog() {
     noteDialog.showModal();
 }
 
-// ===== Event Listeners =====
-noteForm.addEventListener("submit", async e => {
+// ===== Initialize DOM-dependent elements =====
+window.onload = async () => {
+    // Grab DOM elements
+    notesGrid = document.getElementById("notesGrid");
+    noteDialog = document.getElementById("noteDialog");
+    noteForm = document.getElementById("noteForm");
+    noteIdInput = document.getElementById("noteId");
+    noteTitle = document.getElementById("noteTitle");
+    noteContent = document.getElementById("noteContent");
+    noteTags = document.getElementById("noteTags");
+    noteColor = document.getElementById("noteColor");
+    noteFilesInput = document.getElementById("noteFiles");
+    searchInput = document.getElementById("searchInput");
+    tagFilter = document.getElementById("tagFilter");
+    deleteNoteBtn = document.getElementById("deleteNoteBtn");
+    logoutBtn = document.getElementById("logoutBtn");
+    installBtn = document.getElementById("installBtn");
+    emptyState = document.getElementById("emptyState");
+    closeNoteBtn = document.getElementById("closeNoteBtn");
+
+    // Floating FAB
+    fab = document.createElement("button");
+    fab.innerHTML = "+";
+    fab.className = "fixed bottom-6 right-6 w-16 h-16 rounded-full bg-sky-600 text-white text-3xl shadow-lg flex items-center justify-center hover:bg-sky-700 transition";
+    document.body.appendChild(fab);
+    fab.addEventListener("click", openNewNoteDialog);
+
+    // Sync indicator
+    syncIndicator = document.createElement("div");
+    syncIndicator.id = "syncIndicator";
+    syncIndicator.textContent = "Syncing...";
+    Object.assign(syncIndicator.style, {
+        position: "fixed",
+        bottom: "20px",
+        right: "20px",
+        background: "rgba(0,0,0,0.7)",
+        color: "white",
+        padding: "10px 15px",
+        borderRadius: "8px",
+        fontSize: "14px",
+        display: "none"
+    });
+    document.body.appendChild(syncIndicator);
+
+    // Color buttons
+    document.querySelectorAll(".color-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const selectedColor = COLOR_OPTIONS.find(c => c.name.toLowerCase() === btn.dataset.color.toLowerCase());
+            if (selectedColor) noteColor.value = selectedColor.value;
+        });
+    });
+
+    // Event listeners
+    noteForm.addEventListener("submit", handleNoteSubmit);
+    closeNoteBtn?.addEventListener("click", () => noteDialog.close());
+    deleteNoteBtn.addEventListener("click", handleNoteDelete);
+    [noteTitle, noteContent, noteTags, noteColor, noteFilesInput].forEach(input => input.addEventListener("input", autoBackup));
+    searchInput.addEventListener("input", renderNotes);
+    tagFilter.addEventListener("change", renderNotes);
+    logoutBtn.addEventListener("click", () => {
+        if (confirm("Are you sure you want to logout?")) {
+            localStorage.removeItem("accessToken");
+            window.location.href = "index.html";
+        }
+    });
+
+    // PWA install
+    let deferredPrompt;
+    window.addEventListener('beforeinstallprompt', e => {
+        e.preventDefault();
+        deferredPrompt = e;
+        installBtn.classList.remove("hidden");
+    });
+    installBtn.addEventListener("click", async () => {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        await deferredPrompt.userChoice;
+        installBtn.classList.add("hidden");
+        deferredPrompt = null;
+    });
+
+    // Load & render
+    loadNotes();
+    renderNotes();
+
+    // Service worker
+    if ('serviceWorker' in navigator) {
+        try { await navigator.serviceWorker.register('service-worker.js'); }
+        catch (e) { console.warn("SW registration failed", e); }
+    }
+
+    await restoreNotes();
+};
+
+// ===== Handle Note Form =====
+async function handleNoteSubmit(e) {
     e.preventDefault();
     const title = noteTitle.value.trim();
     if (!title) { toast("Title cannot be empty ❌"); return; }
@@ -283,7 +340,6 @@ noteForm.addEventListener("submit", async e => {
     const id = noteIdInput.value;
     const tags = noteTags.value.split(",").map(t => t.trim()).filter(t => t);
     const colorValue = noteColor.value || COLOR_OPTIONS[0].value;
-
     const filesArray = Array.from(noteFilesInput.files).map(f => ({
         name: f.name,
         type: f.type,
@@ -302,7 +358,7 @@ noteForm.addEventListener("submit", async e => {
     } else {
         notes.push({
             id: Date.now().toString(),
-            title: title,
+            title,
             content: noteContent.value.trim(),
             tags,
             color: colorValue,
@@ -315,13 +371,10 @@ noteForm.addEventListener("submit", async e => {
     renderNotes();
     noteDialog.close();
     autoBackup();
-});
+}
 
-// Close note dialog
-closeNoteBtn?.addEventListener("click", () => noteDialog.close());
-
-// Delete note
-deleteNoteBtn.addEventListener("click", () => {
+// ===== Handle Note Delete =====
+function handleNoteDelete() {
     const id = noteIdInput.value;
     notes = notes.filter(n => n.id !== id);
     saveNotes();
@@ -329,46 +382,4 @@ deleteNoteBtn.addEventListener("click", () => {
     noteDialog.close();
     toast("Note deleted ✔");
     autoBackup();
-});
-
-// Inputs for autoBackup
-[noteTitle, noteContent, noteTags, noteColor, noteFilesInput].forEach(input => input.addEventListener("input", autoBackup));
-
-searchInput.addEventListener("input", renderNotes);
-tagFilter.addEventListener("change", renderNotes);
-
-// Logout with confirmation
-logoutBtn.addEventListener("click", () => {
-    if (confirm("Are you sure you want to logout?")) {
-        localStorage.removeItem("accessToken");
-        window.location.href = "index.html";
-    }
-});
-
-// ===== PWA Install =====
-let deferredPrompt;
-window.addEventListener('beforeinstallprompt', e => {
-    e.preventDefault();
-    deferredPrompt = e;
-    installBtn.classList.remove("hidden");
-});
-installBtn.addEventListener("click", async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    await deferredPrompt.userChoice;
-    installBtn.classList.add("hidden");
-    deferredPrompt = null;
-});
-
-// ===== Initialize =====
-window.onload = async () => {
-    loadNotes();
-    renderNotes();
-
-    if ('serviceWorker' in navigator) {
-        try { await navigator.serviceWorker.register('service-worker.js'); }
-        catch (e) { console.warn("SW registration failed", e); }
-    }
-
-    await restoreNotes();
-};
+}
