@@ -121,40 +121,51 @@ async function findFileInFolder(folderId, fileName) {
 
 async function backupToDrive() {
     try {
-        showSyncing();
         const ready = await ensureGapiAndToken();
         if (!ready) return;
 
         const folderId = await getOrCreateFolderByName(DRIVE_PRIMARY_FOLDER);
-        let file = await findFileInFolder(folderId, DRIVE_PRIMARY_FILE);
 
-        const payload = new Blob([JSON.stringify(notes, null, 2)], { type: 'application/json' });
+        // Get all notes from IndexedDB
+        const allNotes = await loadNotesFromDB(); // <-- MUST await full list
+        const contentBlob = new Blob([JSON.stringify(allNotes, null, 2)], { type: "application/json" });
+
+        // Check if file exists
+        const res = await gapi.client.drive.files.list({
+            q: `'${folderId}' in parents and name='${DRIVE_PRIMARY_FILE}' and trashed=false`,
+            fields: "files(id, name)"
+        });
+        const file = res.result.files?.[0];
 
         if (file) {
+            // Update existing file
             await gapi.client.request({
                 path: `/upload/drive/v3/files/${file.id}`,
-                method: 'PATCH',
-                params: { uploadType: 'media' },
-                body: payload
+                method: "PATCH",
+                params: { uploadType: "media" },
+                body: contentBlob
             });
         } else {
-            const metadata = { name: DRIVE_PRIMARY_FILE, parents: [folderId], mimeType: 'application/json' };
+            // Create new file
+            const metadata = {
+                name: DRIVE_PRIMARY_FILE,
+                parents: [folderId],
+                mimeType: "application/json"
+            };
             const formData = new FormData();
-            formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-            formData.append('file', payload);
+            formData.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
+            formData.append("file", contentBlob);
 
-            await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id", {
-                method: 'POST',
+            await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
+                method: "POST",
                 headers: { Authorization: `Bearer ${accessToken}` },
                 body: formData
             });
         }
-        toast("Backup to Drive complete ✔");
+
+        console.log("Backup complete ✅");
     } catch (err) {
-        console.error("Drive backup failed", err);
-        toast("Backup failed ❌");
-    } finally {
-        hideSyncing();
+        console.error("Drive backup failed ❌", err);
     }
 }
 
