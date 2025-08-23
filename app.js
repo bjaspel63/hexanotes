@@ -174,26 +174,58 @@ async function findFileInFolder(folderId, fileName){
 }
 
 // ===== Backup =====
-async function backupNotes(){
-  try{
+async function backupNotes() {
+  try {
     await ensureGapiReady();
-    if(!ensureToken()) return toast("Login required");
+    if (!ensureToken()) return toast("Login required");
+
+    // Step 1: Get or create primary folder
     const folderId = await getOrCreatePrimaryFolder();
-    const existing = await findFileInFolder(folderId, DRIVE_PRIMARY_FILE);
-    const payload = new Blob([JSON.stringify(notes)],{type:'application/json'});
-    if(existing){
-      await gapi.client.request({path:`/upload/drive/v3/files/${existing.id}`, method:'PATCH', params:{uploadType:'media'}, body:payload});
+
+    // Step 2: Check if file exists
+    let file = await findFileInFolder(folderId, DRIVE_PRIMARY_FILE);
+
+    // Step 3: Prepare content
+    const payload = new Blob([JSON.stringify(notes)], { type: 'application/json' });
+
+    if (file) {
+      // Update existing file
+      await gapi.client.request({
+        path: `/upload/drive/v3/files/${file.id}`,
+        method: 'PATCH',
+        params: { uploadType: 'media' },
+        body: payload
+      });
+
       toast("Backup updated in Drive ✔");
     } else {
-      const metadata={name:DRIVE_PRIMARY_FILE, parents:[folderId]};
+      // Create new file via multipart
+      const metadata = { name: DRIVE_PRIMARY_FILE, parents: [folderId] };
       const formData = new FormData();
-      formData.append('metadata',new Blob([JSON.stringify(metadata)],{type:'application/json'}));
-      formData.append('file',payload);
-      await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink",{method:'POST',headers:{Authorization:`Bearer ${accessToken}`},body:formData});
+      formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+      formData.append('file', payload);
+
+      const res = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink", {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: formData
+      });
+      const newFile = await res.json();
+
+      // Step 4: Move the file to My Drive (visible folder)
+      await gapi.client.drive.files.update({
+        fileId: newFile.id,
+        addParents: folderId,  // ensure it's in your folder
+        removeParents: 'root'  // remove from hidden app files
+      });
+
       toast("Backup created in Drive ✔");
     }
-  } catch(err){ handleDriveError(err,"Backup failed."); }
+  } catch (err) {
+    handleDriveError(err, "Backup failed. Check your login and permissions.");
+  }
 }
+
 
 // ===== Restore =====
 async function restoreNotes(){
