@@ -113,7 +113,22 @@ async function restoreNotes() {
 
         const folderId = await getOrCreateFolderByName(DRIVE_PRIMARY_FOLDER);
         const file = await findFileInFolder(folderId, DRIVE_PRIMARY_FILE);
-        if (!file) return;
+
+        if (!file) {
+            // create empty notes.json if missing
+            const payload = new Blob([JSON.stringify([])], { type: 'application/json' });
+            const metadata = { name: DRIVE_PRIMARY_FILE, parents: [folderId] };
+            const formData = new FormData();
+            formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+            formData.append('file', payload);
+            await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id", {
+                method: 'POST', headers: { Authorization: `Bearer ${accessToken}` }, body: formData
+            });
+            notes = [];
+            saveNotesLocal();
+            renderNotes();
+            return;
+        }
 
         const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
             headers: { Authorization: `Bearer ${accessToken}` }
@@ -145,6 +160,7 @@ function renderNotes() {
     filtered.forEach(note => {
         const div = document.createElement("div");
         div.className = "note-card relative bg-white p-4 rounded-xl shadow hover:shadow-md transition";
+        div.style.cursor = "default";
 
         const colorOption = COLOR_OPTIONS.find(c => c.value === note.color) || COLOR_OPTIONS[0];
         div.style.background = colorOption.gradient;
@@ -163,15 +179,23 @@ function renderNotes() {
             </div>
             <div class="mt-3 note-files flex flex-col gap-1">
                 ${note.files?.map(f => {
-                    if(f.type.startsWith("image/")) return `<img src="${f.url}" class="w-full rounded-lg">`;
-                    if(f.type.startsWith("video/")) return `<video src="${f.url}" controls class="w-full rounded-lg"></video>`;
-                    return `<a href="${f.url}" target="_blank" style="color:${colorOption.textColor}; text-decoration: underline;">${f.name}</a>`;
+                    if (!f.url) return '';
+                    const fileExt = f.name.split('.').pop().toLowerCase();
+                    if (f.type.startsWith("image/") || ["png","jpg","jpeg","gif","webp"].includes(fileExt)) {
+                        return `<img src="${f.url}" class="w-full rounded-lg" />`;
+                    }
+                    if (f.type.startsWith("video/") || ["mp4","webm","ogg"].includes(fileExt)) {
+                        return `<video src="${f.url}" controls class="w-full rounded-lg"></video>`;
+                    }
+                    // Other files
+                    return `<a href="${f.url}" target="_blank" class="underline text-sm">${f.name}</a>`;
                 }).join('') || ''}
             </div>
+
             <button class="edit-btn absolute top-2 right-2 text-white bg-black/30 px-2 py-1 rounded">Edit</button>
         `;
 
-        div.querySelector(".edit-btn").addEventListener("click", (e) => {
+        div.querySelector(".edit-btn").addEventListener("click", e => {
             e.stopPropagation();
             openNoteDialog(note.id);
         });
@@ -270,6 +294,7 @@ window.onload = async () => {
 
     logoutBtn.addEventListener("click", () => {
         if (confirm("Are you sure you want to logout?")) {
+            autoBackup(); // save before logout
             localStorage.removeItem("accessToken");
             window.location.href = "index.html";
         }
@@ -290,9 +315,34 @@ async function handleNoteSubmit(e) {
     const tags = noteTags.value.split(",").map(t => t.trim()).filter(t => t);
     const colorValue = noteColor.value || COLOR_OPTIONS[0].value;
 
-    const filesArray = Array.from(noteFilesInput.files).map(f => ({
-        name: f.name, type: f.type, url: URL.createObjectURL(f)
-    }));
+    let filesArray = [];
+
+    if (noteFilesInput.files.length > 0) {
+        try {
+            const ready = await ensureGapiAndToken();
+            if (!ready) return;
+
+            const folderId = await getOrCreateFolderByName(DRIVE_PRIMARY_FOLDER);
+
+            for (const f of noteFilesInput.files) {
+                const metadata = { name: f.name, parents: [folderId] };
+                const formData = new FormData();
+                formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+                formData.append('file', f);
+
+                const res = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink", {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${accessToken}` },
+                    body: formData
+                });
+                const data = await res.json();
+                filesArray.push({ name: f.name, type: f.type, url: data.webViewLink });
+            }
+        } catch (err) {
+            console.error("File upload failed", err);
+            toast("File upload failed ❌");
+        }
+    }
 
     if (id) {
         const note = notes.find(n => n.id === id);
@@ -301,7 +351,7 @@ async function handleNoteSubmit(e) {
         note.content = noteContent.value.trim();
         note.tags = tags;
         note.color = colorValue;
-        note.files = [...(note.files||[]), ...filesArray];
+        note.files = [...(note.files || []), ...filesArray];
         toast("Note updated ✔");
     } else {
         notes.push({ id: Date.now().toString(), title, content: noteContent.value.trim(), tags, color: colorValue, files: filesArray });
