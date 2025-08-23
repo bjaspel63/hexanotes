@@ -23,12 +23,29 @@ const logoutBtn = document.getElementById("logoutBtn");
 const installBtn = document.getElementById("installBtn");
 const emptyState = document.getElementById("emptyState");
 
+// Create a syncing indicator element
+const syncIndicator = document.createElement("div");
+syncIndicator.id = "syncIndicator";
+syncIndicator.textContent = "Syncing...";
+syncIndicator.style.position = "fixed";
+syncIndicator.style.bottom = "20px";
+syncIndicator.style.right = "20px";
+syncIndicator.style.background = "rgba(0,0,0,0.7)";
+syncIndicator.style.color = "white";
+syncIndicator.style.padding = "10px 15px";
+syncIndicator.style.borderRadius = "8px";
+syncIndicator.style.fontSize = "14px";
+syncIndicator.style.display = "none";
+document.body.appendChild(syncIndicator);
+
 // ===== Local Storage Helpers =====
 function saveNotes() { localStorage.setItem("hexaNotes", JSON.stringify(notes)); }
 function loadNotes() { notes = JSON.parse(localStorage.getItem("hexaNotes") || "[]"); }
 
 // ===== Small Helpers =====
 function toast(msg) { alert(msg); }
+function showSyncing() { syncIndicator.style.display = "block"; }
+function hideSyncing() { syncIndicator.style.display = "none"; }
 function isGapiReady() { return window.gapi && gapi.client && typeof gapi.client.request === "function"; }
 
 // ===== Initialize GAPI + Token =====
@@ -83,8 +100,9 @@ function debounce(fn, delay = 2000) {
 const autoBackup = debounce(async () => {
     if (!accessToken || !notes.length) return;
     try {
+        showSyncing();
         const ready = await ensureGapiAndToken();
-        if (!ready) return;
+        if (!ready) { hideSyncing(); return; }
 
         const folderId = await getOrCreatePrimaryFolder();
         let file = await findFileInFolder(folderId, DRIVE_PRIMARY_FILE);
@@ -114,6 +132,8 @@ const autoBackup = debounce(async () => {
 
     } catch (err) {
         console.warn("Auto-backup failed:", err);
+    } finally {
+        hideSyncing();
     }
 }, 2000); // 2s debounce
 
@@ -254,7 +274,7 @@ noteForm.addEventListener("submit", e => {
     renderNotes();
     noteDialog.close();
 
-    autoBackup(); // trigger automatic backup
+    autoBackup();
 });
 
 deleteNoteBtn.addEventListener("click", () => {
@@ -264,7 +284,7 @@ deleteNoteBtn.addEventListener("click", () => {
     renderNotes();
     noteDialog.close();
 
-    autoBackup(); // trigger automatic backup
+    autoBackup();
 });
 
 [noteTitle, noteContent, noteTags, noteColor].forEach(input => {
