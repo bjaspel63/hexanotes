@@ -1,41 +1,86 @@
+/* ===== Global ===== */
+body {
+  font-family: 'Inter', sans-serif;
+  background: #f0f4f8;
+  color: #1e293b;
+  transition: background 0.3s;
+}
+
 /* ===== Note Card ===== */
 .note-card {
-  @apply p-5 rounded-3xl shadow-lg cursor-pointer transition-transform transform;
-  transition: all 0.3s ease-in-out;
+  padding: 1.25rem;
+  border-radius: 1.5rem;
+  cursor: pointer;
   background: linear-gradient(135deg, #fef08a, #fbbf24);
-  break-word: break-word;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+  transition: all 0.3s ease-in-out;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  word-break: break-word;
 }
 .note-card:hover {
-  background: linear-gradient(135deg, #fcd34d, #f59e0b);
   transform: translateY(-5px) scale(1.05);
   box-shadow: 0 20px 40px rgba(0,0,0,0.15);
 }
 .note-card.dragging {
-  opacity: 0.6;
+  opacity: 0.7;
   transform: scale(1.05);
   box-shadow: 0 20px 30px rgba(0,0,0,0.2);
 }
 
+/* ===== Card Content ===== */
+.note-card h3 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 0.5rem;
+}
+.note-card p {
+  font-size: 0.875rem;
+  color: #334155;
+  flex-grow: 1;
+  margin-bottom: 0.75rem;
+}
+
 /* ===== Tag Chips ===== */
 .tag-chip {
-  @apply text-xs px-3 py-1 rounded-full font-medium transition;
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: 9999px;
   background: rgba(255,255,255,0.3);
   color: #1e3a8a;
   margin-top: 0.25rem;
+  margin-right: 0.25rem;
   backdrop-filter: blur(4px);
+  transition: all 0.25s ease;
 }
 .tag-chip:hover {
   transform: scale(1.05);
   background: rgba(255,255,255,0.5);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
 }
+
+/* ===== Notes Grid ===== */
+#notesGrid {
+  display: grid;
+  grid-template-columns: repeat(1, 1fr);
+  gap: 1.25rem;
+}
+@media (min-width: 640px) { #notesGrid { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1024px) { #notesGrid { grid-template-columns: repeat(3, 1fr); } }
 
 /* ===== Empty State ===== */
 #emptyState {
-  @apply text-slate-500 text-center py-10;
+  text-align: center;
+  color: #64748b;
+  padding: 2.5rem 1rem;
+  font-size: 1.125rem;
 }
 
-/* ===== Dialog ===== */
+/* ===== Dialog Styling ===== */
 dialog {
   border: none;
   border-radius: 1.5rem;
@@ -44,9 +89,9 @@ dialog {
   max-width: 500px;
   box-shadow: 0 15px 40px rgba(0,0,0,0.2);
   backdrop-filter: blur(8px);
+  transition: all 0.3s ease-in-out;
 }
 dialog[open] { animation: modalFadeIn 0.25s ease; }
-
 @keyframes modalFadeIn {
   from {opacity:0; transform: translateY(-20px);}
   to {opacity:1; transform: translateY(0);}
@@ -54,35 +99,67 @@ dialog[open] { animation: modalFadeIn 0.25s ease; }
 
 /* ===== Buttons ===== */
 button {
-  @apply px-4 py-2 rounded-xl font-semibold transition;
+  cursor: pointer;
+  font-weight: 600;
+  border-radius: 1rem;
+  padding: 0.5rem 1rem;
+  transition: all 0.2s ease;
 }
 button:hover {
   transform: scale(1.05);
-  box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+  box-shadow: 0 6px 12px rgba(0,0,0,0.15);
 }
 
-/* ===== Inputs ===== */
+/* ===== Inputs & Textarea ===== */
 input, textarea, select {
-  @apply px-4 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-yellow-400 transition;
+  padding: 0.5rem 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid #cbd5e1;
+  outline: none;
+  transition: all 0.2s ease;
+}
+input:focus, textarea:focus, select:focus {
+  border-color: #facc15;
+  box-shadow: 0 0 0 2px rgba(250,204,21,0.3);
 }
 
-/* ===== Notes Grid ===== */
-#notesGrid {
-  @apply grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5;
+/* ===== Floating Action Button (FAB) ===== */
+#newNoteBtn {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  background: linear-gradient(135deg, #0ea5e9, #3b82f6);
+  color: white;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  font-size: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+  transition: all 0.3s ease;
 }
-
-/* ===== Responsive Typography ===== */
-.note-card h3 {
-  @apply text-lg font-bold text-slate-900;
-}
-.note-card p {
-  @apply text-sm text-slate-700 mt-2;
-  word-break: break-word;
+#newNoteBtn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 15px 35px rgba(0,0,0,0.2);
 }
 
 /* ===== PWA Install Button ===== */
 #installBtn {
-  @apply fixed bottom-5 right-5 bg-yellow-400 text-white px-4 py-2 rounded-full shadow-lg cursor-pointer transition hover:bg-yellow-500;
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  background: #facc15;
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+  transition: all 0.25s ease;
+}
+#installBtn:hover {
+  background: #fbbf24;
+  transform: scale(1.05);
 }
 
 /* ===== Scrollbar Styling ===== */
