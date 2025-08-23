@@ -19,8 +19,6 @@ const searchInput = document.getElementById("searchInput");
 const tagFilter = document.getElementById("tagFilter");
 const newNoteBtn = document.getElementById("newNoteBtn");
 const deleteNoteBtn = document.getElementById("deleteNoteBtn");
-const backupBtn = document.getElementById("backupBtn");
-const restoreBtn = document.getElementById("restoreBtn");
 const logoutBtn = document.getElementById("logoutBtn");
 const installBtn = document.getElementById("installBtn");
 const emptyState = document.getElementById("emptyState");
@@ -63,7 +61,6 @@ async function getOrCreateFolderByName(name) {
     });
     return folder.result.id;
 }
-
 async function getOrCreatePrimaryFolder() { return await getOrCreateFolderByName(DRIVE_PRIMARY_FOLDER); }
 async function findFileInFolder(folderId, fileName) {
     const res = await gapi.client.drive.files.list({
@@ -73,8 +70,18 @@ async function findFileInFolder(folderId, fileName) {
     return res.result.files?.[0] || null;
 }
 
-// ===== Backup =====
-async function backupNotes() {
+// ===== Debounce Helper =====
+function debounce(fn, delay = 2000) {
+    let timer;
+    return (...args) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn(...args), delay);
+    };
+}
+
+// ===== Auto Backup =====
+const autoBackup = debounce(async () => {
+    if (!accessToken || !notes.length) return;
     try {
         const ready = await ensureGapiAndToken();
         if (!ready) return;
@@ -91,21 +98,24 @@ async function backupNotes() {
                 params: { uploadType: 'media' },
                 body: payload
             });
-            toast("Backup updated in Drive ✔");
+            console.log("Auto-backup updated ✔");
         } else {
             const metadata = { name: DRIVE_PRIMARY_FILE, parents: [folderId] };
             const formData = new FormData();
             formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
             formData.append('file', payload);
-            const res = await fetch(
+
+            await fetch(
                 "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink",
                 { method: 'POST', headers: { Authorization: `Bearer ${accessToken}` }, body: formData }
             );
-            const newFile = await res.json();
-            toast("Backup created in Drive ✔");
+            console.log("Auto-backup created ✔");
         }
-    } catch (err) { handleDriveError(err, "Backup failed."); }
-}
+
+    } catch (err) {
+        console.warn("Auto-backup failed:", err);
+    }
+}, 2000); // 2s debounce
 
 // ===== Restore =====
 async function restoreNotes() {
@@ -216,11 +226,13 @@ newNoteBtn.addEventListener("click", () => {
     deleteNoteBtn.style.display = "none";
     noteDialog.showModal();
 });
+
 noteForm.addEventListener("submit", e => {
     e.preventDefault();
     const id = noteIdInput.value;
     const tags = noteTags.value.split(",").map(t => t.trim()).filter(t => t);
     const colorValue = noteColor.value || "#fef08a";
+
     if (id) {
         const note = notes.find(n => n.id === id);
         if (!note) return;
@@ -237,25 +249,37 @@ noteForm.addEventListener("submit", e => {
             color: colorValue
         });
     }
+
     saveNotes();
     renderNotes();
     noteDialog.close();
+
+    autoBackup(); // trigger automatic backup
 });
+
 deleteNoteBtn.addEventListener("click", () => {
     const id = noteIdInput.value;
     notes = notes.filter(n => n.id !== id);
     saveNotes();
     renderNotes();
     noteDialog.close();
+
+    autoBackup(); // trigger automatic backup
 });
+
+[noteTitle, noteContent, noteTags, noteColor].forEach(input => {
+    input.addEventListener("input", () => {
+        autoBackup();
+    });
+});
+
 searchInput.addEventListener("input", renderNotes);
 tagFilter.addEventListener("change", renderNotes);
+
 logoutBtn.addEventListener("click", () => {
     localStorage.removeItem("accessToken");
     window.location.href = "index.html";
 });
-backupBtn.addEventListener("click", backupNotes);
-restoreBtn.addEventListener("click", restoreNotes);
 
 // ===== PWA Install =====
 let deferredPrompt;
@@ -280,4 +304,7 @@ window.onload = async () => {
         try { await navigator.serviceWorker.register('service-worker.js'); } 
         catch (e) { console.warn("SW registration failed", e); }
     }
+
+    // Restore from Drive on load automatically
+    await restoreNotes();
 };
