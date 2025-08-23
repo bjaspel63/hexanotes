@@ -1,0 +1,12 @@
+{
+  "name": "HexaNotes",
+  "short_name": "Notes",
+  "description": "A modern note-taking PWA for teachers with Google Drive backup.",
+  "start_url": "main.html",
+  "display": "standalone",
+  "background_color": "#0ea5e9",
+  "theme_color": "#0ea5e9",
+  "icons": [
+    { "src": "icon.png", "sizes": "192x192", "type": "image/png" }
+  ]
+}
